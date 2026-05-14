@@ -1,0 +1,66 @@
+/**
+ * AlgoForge — src/data/bar_store.cpp
+ * Thread-safe in-memory bar cache backed by the paper broker.
+ */
+#include "core/types.h"
+#include "broker/broker.hpp"
+#include <unordered_map>
+#include <vector>
+#include <string>
+#include <mutex>
+#include <cstring>
+#include <cstdio>
+#include <memory>
+
+namespace af {
+
+class BarStore {
+public:
+    explicit BarStore(IBroker *broker) : broker_(broker) {}
+
+    /**
+     * Get bars for (symbol, tf). Fetches from broker if not cached.
+     * Returns pointer to internal buffer (valid until next call with same key).
+     * *count is set to number of valid bars.
+     */
+    const AF_Bar* get(const char *symbol, AF_Timeframe tf,
+                      int count, int *out_count)
+    {
+        std::lock_guard lk(mu_);
+        std::string key = std::string(symbol) + "/" + std::to_string((int)tf);
+
+        auto &entry = cache_[key];
+        if ((int)entry.bars.size() < count) {
+            entry.bars.resize(count);
+            int filled=0;
+            AF_Error err = broker_->get_bars(symbol, tf, count,
+                                              entry.bars.data(), &filled);
+            if (err != AF_OK || filled == 0) {
+                *out_count = 0; return nullptr;
+            }
+            entry.bars.resize(filled);
+        }
+        *out_count = (int)entry.bars.size();
+        return entry.bars.data();
+    }
+
+    /** Invalidate cache for a symbol/tf (force re-fetch on next get) */
+    void invalidate(const char *symbol, AF_Timeframe tf) {
+        std::lock_guard lk(mu_);
+        std::string key = std::string(symbol) + "/" + std::to_string((int)tf);
+        cache_.erase(key);
+    }
+
+    void invalidate_all() {
+        std::lock_guard lk(mu_);
+        cache_.clear();
+    }
+
+private:
+    struct CacheEntry { std::vector<AF_Bar> bars; };
+    IBroker *broker_;
+    std::mutex mu_;
+    std::unordered_map<std::string, CacheEntry> cache_;
+};
+
+} /* namespace af */
