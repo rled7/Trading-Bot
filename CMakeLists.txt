@@ -15,11 +15,7 @@ if(MSVC)
   add_compile_options(/W3 /O2 /MP)
   add_compile_definitions(_CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
 else()
-  add_compile_options(
-    -Wall -Wextra
-    $<$<CONFIG:Release>:-O2 -DNDEBUG>
-    $<$<CONFIG:Debug>:-O0 -g>
-  )
+  add_compile_options(-Wall -Wextra)
 endif()
 
 if(WIN32)

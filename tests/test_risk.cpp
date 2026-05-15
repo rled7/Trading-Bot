@@ -1,7 +1,7 @@
 /**
  * AlgoForge — tests/test_risk.cpp
  */
-#include "tests/test_helpers.hpp"
+#include "test_helpers.hpp"
 #include "risk/risk_types.h"
 #include "indicators/indicators.h"
 #include "core/types.h"

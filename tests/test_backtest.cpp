@@ -1,7 +1,7 @@
 /**
  * AlgoForge — tests/test_backtest.cpp
  */
-#include "tests/test_helpers.hpp"
+#include "test_helpers.hpp"
 #include "backtesting/backtest_engine.hpp"
 #include "algorithms/algorithm.hpp"
 #include "broker/broker.hpp"

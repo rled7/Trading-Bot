@@ -2,7 +2,7 @@
  * AlgoForge — tests/test_indicators.cpp
  * Unit tests for all indicator math functions.
  */
-#include "tests/test_helpers.hpp"
+#include "test_helpers.hpp"
 #include "indicators/indicators.h"
 #include "indicators/indicator_engine.hpp"
 #include "core/types.h"

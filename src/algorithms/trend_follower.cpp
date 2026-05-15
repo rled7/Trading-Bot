@@ -52,8 +52,6 @@ public:
             AlgoDecision d;
             d.signal = AlgoSignal::BUY; d.symbol = symbol;
             d.direction = AF_DIR_LONG; d.confidence = conf; d.atr = atr;
-            snprintf(d.reason.data(), 255, "EMA%d>EMA%d ADX=%.1f RSI=%.1f",
-                     fast_, slow_, adx, rsi);
             d.reason = std::string("EMA cross up ADX=") + std::to_string((int)adx);
             return d;
         }
@@ -74,7 +72,7 @@ private:
     int fast_, slow_;
     double adx_min_;
     std::string name_ = std::string("TrendFollower_EMA") +
-                        std::to_string(21) + "/" + std::to_string(50);
+                        std::to_string(fast_) + "/" + std::to_string(slow_);
 };
 
 /* Factory */

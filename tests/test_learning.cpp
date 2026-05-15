@@ -1,7 +1,7 @@
 /**
  * AlgoForge — tests/test_learning.cpp
  */
-#include "tests/test_helpers.hpp"
+#include "test_helpers.hpp"
 #include "learning/error_registry.hpp"
 #include "core/types.h"
 #include <cstring>

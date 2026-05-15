@@ -1,4 +1,4 @@
-#include "tests/test_helpers.hpp"
+#include "test_helpers.hpp"
 /**
  * AlgoForge — tests/test_main.cpp
  * Self-contained test runner. No external test framework required.

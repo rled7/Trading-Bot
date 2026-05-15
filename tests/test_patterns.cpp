@@ -1,7 +1,7 @@
 /**
  * AlgoForge — tests/test_patterns.cpp
  */
-#include "tests/test_helpers.hpp"
+#include "test_helpers.hpp"
 #include "patterns/pattern_engine.hpp"
 #include "patterns/pattern_types.h"
 #include "core/types.h"

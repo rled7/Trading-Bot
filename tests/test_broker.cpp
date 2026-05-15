@@ -1,7 +1,7 @@
 /**
  * AlgoForge — tests/test_broker.cpp
  */
-#include "tests/test_helpers.hpp"
+#include "test_helpers.hpp"
 #include "broker/broker.hpp"
 #include "core/types.h"
 #include <cstring>
