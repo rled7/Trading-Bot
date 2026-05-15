@@ -23,17 +23,27 @@ static constexpr const char *CREATE_SQL =
     "  net_pnl      REAL    NOT NULL,"
     "  bars_held    INTEGER NOT NULL,"
     "  close_reason TEXT    NOT NULL,"
+    "  client_id    TEXT    NOT NULL DEFAULT '',"
     "  created_at   TEXT    NOT NULL DEFAULT (datetime('now'))"
     ");"
     "CREATE INDEX IF NOT EXISTS idx_trades_run    ON trades(run_id);"
-    "CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);";
+    "CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);"
+    /* Partial unique index — enforces idempotency for non-empty keys only,
+       so legacy rows (where client_id defaulted to '') don't collide. */
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_trades_run_client"
+    " ON trades(run_id, client_id) WHERE client_id != '';";
+
+/* Best-effort schema migration: adds client_id to an older `trades` table.
+   Errors (e.g. "duplicate column name") are intentionally ignored. */
+static constexpr const char *MIGRATE_SQL =
+    "ALTER TABLE trades ADD COLUMN client_id TEXT NOT NULL DEFAULT '';";
 
 static constexpr const char *INSERT_SQL =
-    "INSERT INTO trades("
+    "INSERT OR IGNORE INTO trades("
     " run_id,symbol,algo,direction,"
     " entry_time,entry_price,exit_time,exit_price,"
-    " lots,sl,tp,gross_pnl,commission,net_pnl,bars_held,close_reason)"
-    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+    " lots,sl,tp,gross_pnl,commission,net_pnl,bars_held,close_reason,client_id)"
+    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
 
 TradeJournal::TradeJournal(const std::string &db_path) {
     if (sqlite3_open(db_path.c_str(), &db_) != SQLITE_OK) {
@@ -49,6 +59,8 @@ TradeJournal::TradeJournal(const std::string &db_path) {
         sqlite3_close(db_); db_ = nullptr;
         return;
     }
+    /* Migration is best-effort: errors on already-migrated DBs are expected. */
+    sqlite3_exec(db_, MIGRATE_SQL, nullptr, nullptr, nullptr);
     if (sqlite3_prepare_v2(db_, INSERT_SQL, -1, &insert_, nullptr) != SQLITE_OK) {
         fprintf(stderr, "[Journal] prepare failed: %s\n", sqlite3_errmsg(db_));
         sqlite3_close(db_); db_ = nullptr; insert_ = nullptr;
@@ -82,6 +94,7 @@ bool TradeJournal::record(const BTTrade &t, const std::string &run_id) {
     sqlite3_bind_double(insert_, 14, t.net_pnl());
     sqlite3_bind_int   (insert_, 15, t.bars_held);
     sqlite3_bind_text  (insert_, 16, t.close_reason, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (insert_, 17, t.client_id,    -1, SQLITE_TRANSIENT);
 
     if (sqlite3_step(insert_) != SQLITE_DONE) {
         fprintf(stderr, "[Journal] insert failed: %s\n", sqlite3_errmsg(db_));

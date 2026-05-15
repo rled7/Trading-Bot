@@ -114,6 +114,10 @@ typedef struct {
     int64_t      open_time, fill_time;
     uint32_t     magic;
     char         comment[64];
+    /* Idempotency / client-supplied dedup key. UUIDv4 strings fit in 36+1 bytes;
+       40 leaves slack. Empty string means "not set". Pass-through on the
+       broker side; the trade journal enforces uniqueness per run_id. */
+    char         client_id[40];
 } AF_Order;
 
 /* ── Account ── */

@@ -24,6 +24,10 @@ struct BTTrade {
     int      bars_held{0};
     char     close_reason[16]{};   /* "SL" | "TP" | "END" */
     char     algo[64]{};
+    /* Deterministic idempotency key — set by the engine at trade open as
+       "{run_id}#{entry_time}#{direction}". The trade journal's partial
+       unique index uses it to dedupe re-runs against the same DB. */
+    char     client_id[40]{};
 
     double net_pnl()   const { return gross_pnl - commission; }
     bool   is_winner() const { return net_pnl() > 0; }
@@ -66,6 +70,11 @@ struct BTConfig {
     double rr_ratio        = 2.0;
     int    warmup_bars     = 200;
     std::string journal_db_path;     /* empty = no journaling */
+    /* Optional caller-supplied run identifier. When set, trade client_ids
+       are stable across invocations and re-running the same backtest is
+       idempotent (the journal's partial unique index dedupes). When empty,
+       the engine mints a timestamped run_id and every run is unique. */
+    std::string journal_run_id;
 };
 
 /* ── Engine ── */

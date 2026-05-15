@@ -48,6 +48,7 @@ set(CPP_SOURCES
   src/core/engine.cpp
   src/core/config.cpp
   src/broker/paper_broker.cpp
+  src/broker/mt5_broker.cpp
   src/data/bar_store.cpp
   src/data/trade_journal.cpp
   src/data/csv_bars.cpp
