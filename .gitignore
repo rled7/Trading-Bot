@@ -1,0 +1,44 @@
+# Build artifacts
+build/
+out/
+cmake-build-*/
+compile_commands.json
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+
+# Object/binary files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Executables
+algoforge
+af_backtest
+af_tests
+
+# Editor / IDE
+.vscode/
+.idea/
+.cache/
+*.swp
+*~
+.DS_Store
+
+# Local config / secrets
+algoforge.ini
+.env
+*.log
+
+# SQLite databases / journals
+*.db
+*.sqlite
+*.sqlite3
+*-journal
+*-wal
+*-shm

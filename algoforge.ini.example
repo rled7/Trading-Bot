@@ -1,0 +1,43 @@
+# ═══════════════════════════════════════════════════════════
+#   AlgoForge Configuration
+#   Copy to algoforge.ini and fill in your details
+# ═══════════════════════════════════════════════════════════
+
+# ── Broker ──────────────────────────────────────────────────
+# TRADING_MODE: PAPER (safe, no real money) or LIVE
+TRADING_MODE=PAPER
+
+# MetaTrader 5 credentials (only needed for LIVE mode on Windows)
+MT5_LOGIN=12345678
+MT5_PASSWORD=your_password_here
+MT5_SERVER=ICMarkets-Demo
+MT5_PATH=C:\Program Files\MetaTrader 5\terminal64.exe
+
+# ── Risk Management ──────────────────────────────────────────
+# Risk per trade as fraction of balance (0.01 = 1%)
+MAX_RISK_PER_TRADE=0.01
+
+# Stop trading for the day if daily loss exceeds this fraction
+MAX_DAILY_DRAWDOWN=0.05
+
+# Stop trading permanently until restart if total DD exceeds this
+MAX_TOTAL_DRAWDOWN=0.15
+
+# Maximum concurrent open positions
+MAX_OPEN_POSITIONS=5
+
+# ── Paper Trading ────────────────────────────────────────────
+# Starting balance for paper trading mode
+PAPER_BALANCE=10000.0
+
+# ── Logging ──────────────────────────────────────────────────
+LOG_LEVEL=info
+LOG_DIR=logs
+
+# ── Database ─────────────────────────────────────────────────
+DB_PATH=algoforge.db
+
+# ── Telegram Alerts (optional) ───────────────────────────────
+TELEGRAM_ENABLED=false
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
