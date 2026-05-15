@@ -8,14 +8,14 @@
 namespace af {
 
 /* Forward-declared factories */
-std::unique_ptr<IAlgorithm> make_trend_follower(int fast=21, int slow=50, double adx_min=22.0);
+std::unique_ptr<IAlgorithm> make_trend_follower(int fast=21, int slow=50, double adx_min=22.0, uint32_t magic=1001);
 std::unique_ptr<IAlgorithm> make_mean_reversion();
 std::unique_ptr<IAlgorithm> make_breakout_trader(int dc=20, double vm=1.5);
 std::unique_ptr<IAlgorithm> make_swing_trader();
 
 AlgorithmRegistry::AlgorithmRegistry() {
-    register_algo(make_trend_follower(21, 50, 22.0));
-    register_algo(make_trend_follower(9,  21, 20.0));
+    register_algo(make_trend_follower(21, 50, 22.0, 1001));
+    register_algo(make_trend_follower(9,  21, 20.0, 1005));
     register_algo(make_mean_reversion());
     register_algo(make_breakout_trader(20, 1.5));
     register_algo(make_swing_trader());

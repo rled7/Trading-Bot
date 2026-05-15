@@ -17,7 +17,7 @@
 
 namespace af {
     std::unique_ptr<IBroker>    make_paper_broker(double);
-    std::unique_ptr<IAlgorithm> make_trend_follower(int,int,double);
+    std::unique_ptr<IAlgorithm> make_trend_follower(int,int,double,uint32_t=1001);
     std::unique_ptr<IAlgorithm> make_mean_reversion();
     std::unique_ptr<IAlgorithm> make_breakout_trader(int,double);
 }

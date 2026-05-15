@@ -10,14 +10,14 @@ namespace af {
 
 class TrendFollower final : public IAlgorithm {
 public:
-    TrendFollower(int fast=21, int slow=50, double adx_min=22.0)
-        : fast_(fast), slow_(slow), adx_min_(adx_min) {}
+    TrendFollower(int fast=21, int slow=50, double adx_min=22.0, uint32_t magic=1001)
+        : fast_(fast), slow_(slow), adx_min_(adx_min), magic_(magic) {}
 
     const char* name()        const override { return name_.c_str(); }
     const char* description() const override {
         return "EMA crossover + ADX filter + RSI extreme guard";
     }
-    uint32_t magic() const override { return 1001; }
+    uint32_t magic() const override { return magic_; }
 
     AlgoDecision evaluate(const char *symbol, AF_Timeframe tf,
                            const AF_Bar *bars, size_t n,
@@ -71,13 +71,14 @@ public:
 private:
     int fast_, slow_;
     double adx_min_;
+    uint32_t magic_;
     std::string name_ = std::string("TrendFollower_EMA") +
                         std::to_string(fast_) + "/" + std::to_string(slow_);
 };
 
 /* Factory */
-std::unique_ptr<IAlgorithm> make_trend_follower(int fast, int slow, double adx_min) {
-    return std::make_unique<TrendFollower>(fast, slow, adx_min);
+std::unique_ptr<IAlgorithm> make_trend_follower(int fast, int slow, double adx_min, uint32_t magic) {
+    return std::make_unique<TrendFollower>(fast, slow, adx_min, magic);
 }
 
 } /* namespace af */
