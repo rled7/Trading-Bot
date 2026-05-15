@@ -4,6 +4,7 @@
 #include "backtesting/backtest_engine.hpp"
 #include "indicators/indicator_engine.hpp"
 #include "patterns/pattern_engine.hpp"
+#include "data/trade_journal.hpp"
 #include <cstring>
 #include <cstdio>
 #include <cmath>
@@ -11,6 +12,7 @@
 #include <algorithm>
 #include <chrono>
 #include <sstream>
+#include <memory>
 
 namespace af {
 
@@ -138,6 +140,24 @@ BTResult BacktestEngine::run(const AF_Bar *bars, size_t count,
 
     printf("[BT] %s/%s | %zu bars | algo=%s\n", symbol, tf_name(tf), count, algo_->name());
 
+    /* Optional persistent trade journal */
+    std::unique_ptr<TradeJournal> journal;
+    std::string run_id;
+    if (!cfg_.journal_db_path.empty()) {
+        journal = std::make_unique<TradeJournal>(cfg_.journal_db_path);
+        if (journal->ok()) {
+            auto epoch_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::system_clock::now().time_since_epoch()).count();
+            std::ostringstream rid;
+            rid << symbol << "_" << tf_name(tf) << "_" << algo_->name() << "_" << epoch_ms;
+            run_id = rid.str();
+            printf("[BT] Journaling to %s | run_id=%s\n",
+                   cfg_.journal_db_path.c_str(), run_id.c_str());
+        } else {
+            journal.reset();
+        }
+    }
+
     for (size_t i = (size_t)cfg_.warmup_bars; i < count - 1; i++) {
         const AF_Bar &next = bars[i+1];
 
@@ -156,10 +176,14 @@ BTResult BacktestEngine::run(const AF_Bar *bars, size_t count,
                                 : (open_trade.entry_price - exit_p) * open_trade.lots * 100000.0;
                 open_trade.gross_pnl   = raw;
                 open_trade.commission  = cfg_.commission_usd * open_trade.lots;
+                open_trade.exit_price  = exit_p;
+                open_trade.exit_time   = (int64_t)(i+1);
+                open_trade.bars_held   = (int)((int64_t)(i+1) - open_trade.entry_time);
                 snprintf(open_trade.close_reason, 15, "%s", sl_hit?"SL":"TP");
                 capital += open_trade.net_pnl();
                 result.equity_curve.push_back(capital);
                 result.trades.push_back(open_trade);
+                if (journal) journal->record(open_trade, run_id);
                 in_trade = false;
                 continue;
             }
@@ -220,10 +244,14 @@ BTResult BacktestEngine::run(const AF_Bar *bars, size_t count,
                         : (open_trade.entry_price - exit_p)*open_trade.lots*100000.0;
         open_trade.gross_pnl  = raw;
         open_trade.commission = cfg_.commission_usd * open_trade.lots;
+        open_trade.exit_price = exit_p;
+        open_trade.exit_time  = (int64_t)(count-1);
+        open_trade.bars_held  = (int)((int64_t)(count-1) - open_trade.entry_time);
         snprintf(open_trade.close_reason, 15, "END");
         capital += open_trade.net_pnl();
         result.equity_curve.push_back(capital);
         result.trades.push_back(open_trade);
+        if (journal) journal->record(open_trade, run_id);
     }
 
     auto t1 = std::chrono::steady_clock::now();

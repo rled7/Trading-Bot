@@ -3,6 +3,7 @@
  */
 #include "test_helpers.hpp"
 #include "backtesting/backtest_engine.hpp"
+#include "data/trade_journal.hpp"
 #include "algorithms/algorithm.hpp"
 #include "broker/broker.hpp"
 #include "core/types.h"
@@ -12,6 +13,7 @@
 #include <memory>
 #include <vector>
 #include <algorithm>
+#include <cstdio>
 
 
 
@@ -124,5 +126,32 @@ void test_backtest(TestRunner T) {
         auto r2 = bt2.run(bars2.data(),bars2.size(),"EURUSD",AF_TF_H1);
         /* Different trends should produce different results */
         CHK(r1.net_profit() != r2.net_profit() || r1.total_trades() == 0);
+    });
+
+    T("BacktestEngine: trade journal persists every trade to SQLite", []{
+        const char *db = "/tmp/af_test_journal.db";
+        std::remove(db);
+        auto algo = af::make_trend_follower(21,50,22);
+        auto bars = fetch_bars(600, 0.002);
+        af::BTConfig cfg; cfg.initial_capital=10000; cfg.warmup_bars=200;
+        cfg.journal_db_path = db;
+        af::BacktestEngine bt(algo.get(), cfg);
+        auto r = bt.run(bars.data(), bars.size(), "EURUSD", AF_TF_H1);
+        if (r.total_trades() == 0) return; /* nothing to journal on this dataset */
+        af::TradeJournal j(db);
+        CHK(j.ok());
+        CHK_EQ(j.row_count(), r.total_trades());
+        /* Trades should have non-zero exit fields now that the engine populates them */
+        for (const auto &t : r.trades) {
+            CHK_GT(t.exit_time, t.entry_time);
+            CHK(t.exit_price > 0);
+            CHK_GE(t.bars_held, 1);
+        }
+        std::remove(db);
+    });
+
+    T("TradeJournal: ok() is false for an unwritable path", []{
+        af::TradeJournal j("/nonexistent_dir_xyz/cannot_create.db");
+        CHK(!j.ok());
     });
 }

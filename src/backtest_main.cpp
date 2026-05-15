@@ -32,6 +32,7 @@ static void print_usage(const char *prog) {
            "  --algo   trend        Algorithm: trend | reversion | breakout | swing\n"
            "  --capital 10000       Starting capital\n"
            "  --risk   0.01         Risk per trade (fraction)\n"
+           "  --journal-db PATH     Write each closed trade to this SQLite DB\n"
            "  --help\n", prog);
 }
 
@@ -55,6 +56,7 @@ int main(int argc, char **argv) {
     int         bars    = 2000;
     double      capital = 10000.0;
     double      risk    = 0.01;
+    std::string journal_db;
 
     for (int i=1;i<argc;i++) {
         if (strcmp(argv[i],"--help")==0)             { print_usage(argv[0]); return 0; }
@@ -64,6 +66,7 @@ int main(int argc, char **argv) {
         if (strcmp(argv[i],"--bars"  )==0 && i+1<argc) bars    = std::stoi(argv[++i]);
         if (strcmp(argv[i],"--capital")==0&& i+1<argc) capital = std::stod(argv[++i]);
         if (strcmp(argv[i],"--risk"  )==0 && i+1<argc) risk    = std::stod(argv[++i]);
+        if (strcmp(argv[i],"--journal-db")==0 && i+1<argc) journal_db = argv[++i];
     }
 
     AF_Timeframe tf = parse_tf(tf_str.c_str());
@@ -103,8 +106,9 @@ int main(int argc, char **argv) {
     printf("Fetched %d bars. Running backtest...\n\n", filled);
 
     af::BTConfig cfg;
-    cfg.initial_capital = capital;
-    cfg.risk_pct        = risk;
+    cfg.initial_capital  = capital;
+    cfg.risk_pct         = risk;
+    cfg.journal_db_path  = journal_db;
 
     af::BacktestEngine bt_engine(algo.get(), cfg);
     auto result = bt_engine.run(bar_buf.data(), (size_t)filled,

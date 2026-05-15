@@ -65,6 +65,7 @@ struct BTConfig {
     double atr_sl_mult     = 1.5;
     double rr_ratio        = 2.0;
     int    warmup_bars     = 200;
+    std::string journal_db_path;     /* empty = no journaling */
 };
 
 /* ── Engine ── */
