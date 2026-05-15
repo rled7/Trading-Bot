@@ -11,10 +11,12 @@
 #include "algorithms/algorithm.hpp"
 #include "backtesting/backtest_engine.hpp"
 #include "core/config.hpp"
+#include "data/csv_bars.hpp"
 #include <cstdio>
 #include <cstring>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace af {
     std::unique_ptr<IBroker> make_paper_broker(double balance);
@@ -33,6 +35,8 @@ static void print_usage(const char *prog) {
            "  --capital 10000       Starting capital\n"
            "  --risk   0.01         Risk per trade (fraction)\n"
            "  --journal-db PATH     Write each closed trade to this SQLite DB\n"
+           "  --csv        PATH     Load OHLCV bars from a CSV file instead of\n"
+           "                        the paper broker's synthetic random walk\n"
            "  --help\n", prog);
 }
 
@@ -57,6 +61,7 @@ int main(int argc, char **argv) {
     double      capital = 10000.0;
     double      risk    = 0.01;
     std::string journal_db;
+    std::string csv_path;
 
     for (int i=1;i<argc;i++) {
         if (strcmp(argv[i],"--help")==0)             { print_usage(argv[0]); return 0; }
@@ -67,6 +72,7 @@ int main(int argc, char **argv) {
         if (strcmp(argv[i],"--capital")==0&& i+1<argc) capital = std::stod(argv[++i]);
         if (strcmp(argv[i],"--risk"  )==0 && i+1<argc) risk    = std::stod(argv[++i]);
         if (strcmp(argv[i],"--journal-db")==0 && i+1<argc) journal_db = argv[++i];
+        if (strcmp(argv[i],"--csv")==0 && i+1<argc) csv_path = argv[++i];
     }
 
     AF_Timeframe tf = parse_tf(tf_str.c_str());
@@ -90,18 +96,37 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    /* Fetch bars via paper broker */
-    auto broker = af::make_paper_broker(capital);
-    broker->connect();
-
-    std::vector<AF_Bar> bar_buf(bars);
+    /* Fetch bars: from CSV if --csv given, otherwise from the paper broker. */
+    std::vector<AF_Bar> bar_buf;
     int filled = 0;
-    AF_Error err = broker->get_bars(symbol.c_str(), tf, bars,
-                                     bar_buf.data(), &filled);
-    if (err != AF_OK || filled < 250) {
-        printf("Failed to fetch bars (err=%d filled=%d)\n", (int)err, filled);
+
+    if (!csv_path.empty()) {
+        auto res = af::load_csv_bars(csv_path);
+        if (!res.error.empty()) {
+            printf("CSV load failed: %s\n", res.error.c_str());
+            return 1;
+        }
+        bar_buf = std::move(res.bars);
+        filled = (int)bar_buf.size();
+        printf("Loaded %d bars from %s (skipped %d)\n",
+               filled, csv_path.c_str(), res.rows_skipped);
+    } else {
+        auto broker = af::make_paper_broker(capital);
+        broker->connect();
+        bar_buf.assign(bars, AF_Bar{});
+        AF_Error err = broker->get_bars(symbol.c_str(), tf, bars,
+                                         bar_buf.data(), &filled);
+        if (err != AF_OK) {
+            printf("Failed to fetch bars (err=%d filled=%d)\n", (int)err, filled);
+            return 1;
+        }
+    }
+
+    if (filled < 250) {
+        printf("Insufficient bars (%d, need >=250)\n", filled);
         return 1;
     }
+    bar_buf.resize(filled);
 
     printf("Fetched %d bars. Running backtest...\n\n", filled);
 

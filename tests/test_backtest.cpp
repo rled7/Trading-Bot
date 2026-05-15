@@ -4,6 +4,7 @@
 #include "test_helpers.hpp"
 #include "backtesting/backtest_engine.hpp"
 #include "data/trade_journal.hpp"
+#include "data/csv_bars.hpp"
 #include "algorithms/algorithm.hpp"
 #include "broker/broker.hpp"
 #include "core/types.h"
@@ -14,6 +15,7 @@
 #include <vector>
 #include <algorithm>
 #include <cstdio>
+#include <fstream>
 
 
 
@@ -153,5 +155,54 @@ void test_backtest(TestRunner T) {
     T("TradeJournal: ok() is false for an unwritable path", []{
         af::TradeJournal j("/nonexistent_dir_xyz/cannot_create.db");
         CHK(!j.ok());
+    });
+
+    T("CsvBars: loads ISO datetime + header + comma format", []{
+        const char *path = "/tmp/af_test_iso.csv";
+        {
+            std::ofstream o(path);
+            o << "timestamp,open,high,low,close,volume\n"
+                 "2024-01-02 00:00:00,1.0850,1.0855,1.0848,1.0852,1000\n"
+                 "2024-01-02 01:00:00,1.0852,1.0860,1.0850,1.0858,1200\n"
+                 "2024-01-02 02:00:00,1.0858,1.0865,1.0855,1.0860,950\n";
+        }
+        auto res = af::load_csv_bars(path);
+        CHK(res.error.empty());
+        CHK_EQ(res.rows_parsed, 3);
+        CHK_EQ(res.rows_skipped, 1);              /* the header */
+        CHK_EQ((int)res.bars.size(), 3);
+        /* Spot-check first row */
+        CHK_NEAR(res.bars[0].open,  1.0850, 1e-9);
+        CHK_NEAR(res.bars[0].close, 1.0852, 1e-9);
+        CHK_NEAR(res.bars[0].volume, 1000, 1e-9);
+        CHK_GT(res.bars[0].timestamp, 1704153000);  /* sometime around 2024-01-02 UTC */
+        /* Bars are chronological */
+        CHK(res.bars[1].timestamp > res.bars[0].timestamp);
+        CHK(res.bars[2].timestamp > res.bars[1].timestamp);
+        /* Derived fields populated by af_bar_init */
+        CHK(res.bars[0].range > 0);
+        std::remove(path);
+    });
+
+    T("CsvBars: loads epoch + tab + no header", []{
+        const char *path = "/tmp/af_test_epoch.tsv";
+        {
+            std::ofstream o(path);
+            o << "1704153600\t2050.00\t2051.30\t2049.10\t2050.80\t500\n"
+                 "1704157200\t2050.80\t2052.00\t2050.10\t2051.40\t450\n";
+        }
+        auto res = af::load_csv_bars(path);
+        CHK(res.error.empty());
+        CHK_EQ(res.rows_parsed, 2);
+        CHK_EQ(res.rows_skipped, 0);
+        CHK_EQ((int)res.bars[0].timestamp, 1704153600);
+        CHK_EQ((int)res.bars[1].timestamp, 1704157200);
+        std::remove(path);
+    });
+
+    T("CsvBars: bad path returns error, no bars", []{
+        auto res = af::load_csv_bars("/nope/does_not_exist.csv");
+        CHK(!res.error.empty());
+        CHK(res.bars.empty());
     });
 }

@@ -50,6 +50,7 @@ set(CPP_SOURCES
   src/broker/paper_broker.cpp
   src/data/bar_store.cpp
   src/data/trade_journal.cpp
+  src/data/csv_bars.cpp
   src/indicators/indicator_engine.cpp
   src/patterns/pattern_engine.cpp
   src/patterns/candlestick_patterns.cpp
