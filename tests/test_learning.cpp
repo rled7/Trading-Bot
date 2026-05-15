@@ -3,8 +3,10 @@
  */
 #include "test_helpers.hpp"
 #include "learning/error_registry.hpp"
+#include "learning/learned_block_store.hpp"
 #include "core/types.h"
 #include <cstring>
+#include <cstdio>
 #include <functional>
 #include <string>
 
@@ -180,5 +182,81 @@ void test_learning(TestRunner T) {
         auto r = er.check(ctx);
         /* We just verify no crash and block_id (if blocked) is not the ADX rule */
         if (!r.allowed) CHK(r.block_id != "TREND_ALGO_IN_RANGE_ADX_LT_18");
+    });
+
+    T("LearnedBlockStore: upsert + load round-trip preserves metadata and stats", []{
+        const char *db = "/tmp/af_test_learned.db";
+        std::remove(db);
+        {
+            LearnedBlockStore s(db);
+            CHK(s.ok());
+            ErrorBlock b;
+            b.id = "RT_BLOCK_1"; b.description = "round-trip test";
+            b.category = "TEST"; b.severity = BlockSeverity::HARD_BLOCK;
+            b.source = "LEARNED"; b.loss_count = 4; b.total_loss_usd = -123.45;
+            CHK(s.upsert(b));
+            /* Same id again with new stats — should overwrite, not duplicate */
+            b.loss_count = 7; b.total_loss_usd = -250.0;
+            CHK(s.upsert(b));
+            CHK_EQ(s.row_count(), 1);
+        }
+        {
+            LearnedBlockStore s(db);
+            CHK(s.ok());
+            auto rows = s.load_all();
+            CHK_EQ((int)rows.size(), 1);
+            const auto &b = rows[0];
+            CHK(b.id == "RT_BLOCK_1");
+            CHK(b.description == "round-trip test");
+            CHK(b.severity == BlockSeverity::HARD_BLOCK);
+            CHK_EQ(b.loss_count, 7);
+            CHK_NEAR(b.total_loss_usd, -250.0, 1e-9);
+            /* Reconstructed predicate is inert */
+            TradeContext ctx{};
+            CHK_FALSE(b.check(ctx));
+        }
+        std::remove(db);
+    });
+
+    T("ErrorRegistry: learned blocks persist across restarts via load_from_db", []{
+        const char *db = "/tmp/af_test_registry_persist.db";
+        std::remove(db);
+        /* First "process": attach DB, add a learned block twice (loss_count grows). */
+        {
+            ErrorRegistry er;
+            er.load_from_db(db);
+            ErrorBlock b;
+            b.id = "LEARNED_NOON_EURUSD";
+            b.description = "Repeated EURUSD loss at noon UTC";
+            b.category = "TIMING"; b.severity = BlockSeverity::HARD_BLOCK;
+            b.source = "LEARNED"; b.loss_count = 1; b.total_loss_usd = -75.0;
+            b.check = [](const TradeContext &c) {
+                return std::string(c.symbol) == "EURUSD" && c.hour_utc == 12;
+            };
+            er.add_learned_block(b);
+            er.add_learned_block(b);
+            CHK_EQ(er.learned_count(), 1);
+        }
+        /* Second "process": fresh registry, attach same DB — block should reappear. */
+        {
+            ErrorRegistry er;
+            CHK_EQ(er.learned_count(), 0);
+            er.load_from_db(db);
+            CHK_EQ(er.learned_count(), 1);
+            /* Reloaded predicate is inert (always-false), so the rule itself
+               does not block. The persisted stats are what we verify here. */
+            ErrorBlock probe;
+            probe.id = "LEARNED_NOON_EURUSD"; probe.description = "rehydrate";
+            probe.category = "TIMING"; probe.severity = BlockSeverity::HARD_BLOCK;
+            probe.source = "LEARNED"; probe.total_loss_usd = 0;
+            probe.check = [](const TradeContext &c) {
+                return std::string(c.symbol) == "EURUSD" && c.hour_utc == 12;
+            };
+            er.add_learned_block(probe);
+            /* Now there's a live predicate again; noon-EURUSD should block. */
+            auto blocked = make_ctx(AF_DIR_LONG,"EURUSD","trend","BULL","BULL",52,26,1.2,65,12,1);
+            CHK_FALSE(er.check(blocked).allowed);
+        }
+        std::remove(db);
     });
 }

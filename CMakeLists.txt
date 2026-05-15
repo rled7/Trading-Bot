@@ -64,6 +64,7 @@ set(CPP_SOURCES
   src/execution/signal_processor.cpp
   src/monitoring/logger.cpp
   src/learning/error_registry.cpp
+  src/learning/learned_block_store.cpp
 )
 
 add_library(af_engine STATIC ${C_SOURCES} ${CPP_SOURCES})

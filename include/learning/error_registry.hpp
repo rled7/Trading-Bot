@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <memory>
 #include "core/types.h"
 
 namespace af {
@@ -48,10 +49,13 @@ struct BlockResult {
     bool        is_hard_block{false};
 };
 
+class LearnedBlockStore; /* fwd-decl; defined in learning/learned_block_store.hpp */
+
 /* ── Registry ── */
 class ErrorRegistry {
 public:
     ErrorRegistry();
+    ~ErrorRegistry();
 
     /**
      * Check a proposed trade against all registered blocks.
@@ -60,7 +64,12 @@ public:
      */
     BlockResult check(const TradeContext &ctx) const;
 
-    /** Load DB-learned patterns (call on startup) */
+    /**
+     * Attach a SQLite DB for learned-block persistence: load any existing
+     * rows into the in-memory registry, and enable write-through so
+     * subsequent add_learned_block() calls upsert into the DB.
+     * Safe to call multiple times; the latest path wins.
+     */
     void load_from_db(const char *db_path);
 
     /** Add a dynamically learned block (from TradeAnalyzer) */
@@ -75,10 +84,11 @@ public:
 private:
     void register_hardcoded();
 
-    std::vector<ErrorBlock>  hardcoded_;
-    std::vector<ErrorBlock>  learned_;
-    mutable int              blocks_fired_{0};
-    mutable int              warns_fired_{0};
+    std::vector<ErrorBlock>             hardcoded_;
+    std::vector<ErrorBlock>             learned_;
+    std::unique_ptr<LearnedBlockStore>  store_;
+    mutable int                         blocks_fired_{0};
+    mutable int                         warns_fired_{0};
 };
 
 } /* namespace af */

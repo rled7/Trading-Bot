@@ -2,6 +2,7 @@
  * AlgoForge — src/learning/error_registry.cpp
  */
 #include "learning/error_registry.hpp"
+#include "learning/learned_block_store.hpp"
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
@@ -11,6 +12,8 @@ namespace af {
 ErrorRegistry::ErrorRegistry() {
     register_hardcoded();
 }
+
+ErrorRegistry::~ErrorRegistry() = default;
 
 void ErrorRegistry::register_hardcoded() {
     /* ── TIMING ── */
@@ -145,15 +148,24 @@ BlockResult ErrorRegistry::check(const TradeContext &ctx) const {
 }
 
 void ErrorRegistry::add_learned_block(ErrorBlock block) {
-    /* Upsert by ID */
+    /* Upsert by ID. If an existing entry has a stub check (e.g. loaded from
+       DB on startup), the incoming block's check replaces it so the rule
+       becomes live again. */
+    ErrorBlock *stored = nullptr;
     for (auto &b : learned_) {
         if (b.id == block.id) {
             b.loss_count++;
             b.total_loss_usd += block.total_loss_usd;
-            return;
+            if (block.check) b.check = std::move(block.check);
+            stored = &b;
+            break;
         }
     }
-    learned_.push_back(std::move(block));
+    if (!stored) {
+        learned_.push_back(std::move(block));
+        stored = &learned_.back();
+    }
+    if (store_ && store_->ok()) store_->upsert(*stored);
 }
 
 int ErrorRegistry::hardcoded_count() const {
@@ -183,8 +195,30 @@ void ErrorRegistry::print_active_blocks() const {
     printf("%s\n\n", std::string(60,'=').c_str());
 }
 
-void ErrorRegistry::load_from_db(const char *) {
-    /* SQLite loading would go here — stub for now */
+void ErrorRegistry::load_from_db(const char *db_path) {
+    if (!db_path || !*db_path) return;
+    store_ = std::make_unique<LearnedBlockStore>(db_path);
+    if (!store_->ok()) {
+        fprintf(stderr, "[ErrorRegistry] could not attach DB '%s'\n", db_path);
+        store_.reset();
+        return;
+    }
+    /* Merge persisted blocks: rows with an id we already have get their
+       stats overwritten with the DB row; new ids are appended with an
+       always-false predicate. */
+    auto rows = store_->load_all();
+    for (auto &row : rows) {
+        bool merged = false;
+        for (auto &b : learned_) {
+            if (b.id == row.id) {
+                b.loss_count     = row.loss_count;
+                b.total_loss_usd = row.total_loss_usd;
+                merged = true;
+                break;
+            }
+        }
+        if (!merged) learned_.push_back(std::move(row));
+    }
 }
 
 } /* namespace af */
