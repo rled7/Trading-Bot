@@ -10,15 +10,6 @@
 #include <functional>
 #include <string>
 
-static void AF_ASSERT(bool c,const char *e,const char *f,int l){
-    if(!c){char m[512];snprintf(m,512,"%s:%d: ASSERT(%s)",f,l,e);throw std::string(m);}
-}
-#define CHK(e)       AF_ASSERT((e),#e,__FILE__,__LINE__)
-#define CHK_GT(a,b)  AF_ASSERT((a)>(b),#a ">" #b,__FILE__,__LINE__)
-#define CHK_GE(a,b)  AF_ASSERT((a)>=(b),#a ">=" #b,__FILE__,__LINE__)
-#define CHK_LE(a,b)  AF_ASSERT((a)<=(b),#a "<=" #b,__FILE__,__LINE__)
-#define CHK_NEAR(a,b,t) AF_ASSERT(std::fabs((a)-(b))<=(t),#a "~=" #b,__FILE__,__LINE__)
-
 
 static AF_SymbolInfo make_sym() {
     AF_SymbolInfo s{};
