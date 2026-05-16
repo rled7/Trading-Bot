@@ -10,6 +10,8 @@ import sys
 import time
 
 from .indicators import sma, ema, rsi, atr
+from .patterns   import scan_patterns
+from .types      import Bar
 
 
 def gen_series(n: int) -> list[float]:
@@ -43,11 +45,18 @@ def main(argv: list[str]) -> int:
     print(f"# iterations\t{iters}")
     print("indicator\ttotal_ns\tns_per_iter")
 
+    bars = [
+        Bar(timestamp=i, open=src[i], high=hi[i], low=lo[i],
+            close=src[i] + 0.001 * (i % 7 - 3), volume=1.0)
+        for i in range(n)
+    ]
+
     for label, fn in (
         ("sma20", lambda: sma(src, 20)),
         ("ema50", lambda: ema(src, 50)),
         ("rsi14", lambda: rsi(src, 14)),
         ("atr14", lambda: atr(hi, lo, src, 14)),
+        ("pscan", lambda: scan_patterns(bars)),
     ):
         total, per = _time(fn, iters)
         print(f"{label}\t{total}\t{per}")

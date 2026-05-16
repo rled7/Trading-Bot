@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include "af_indicators.h"
+#include "af_patterns.h"
 
 static double *gen_series(size_t n) {
     /* Deterministic walk shared across all four language benches. */
@@ -51,6 +52,21 @@ int main(int argc, char **argv) {
     TIMED("ema50",  af_ema(src, n, 50, out));
     TIMED("rsi14",  af_rsi(src, n, 14, out));
     TIMED("atr14",  af_atr(hi, lo, src, n, 14, out));
+
+    /* Pattern scan over a bar array. */
+    af_bar_t *bars = (af_bar_t*)malloc(n * sizeof(af_bar_t));
+    for (size_t i = 0; i < n; ++i) {
+        bars[i].timestamp = (int64_t)i;
+        bars[i].open  = src[i];
+        bars[i].close = src[i] + 0.001 * (i % 7 - 3);
+        bars[i].high  = hi[i];
+        bars[i].low   = lo[i];
+        bars[i].volume = 1.0;
+        bars[i].spread = 0.0;
+    }
+    af_pattern_match_t *matches = (af_pattern_match_t*)malloc(n * 5 * sizeof(af_pattern_match_t));
+    TIMED("pscan",  af_scan_patterns(bars, n, matches, n * 5));
+    free(matches); free(bars);
 
     free(src); free(hi); free(lo); free(out);
     return 0;

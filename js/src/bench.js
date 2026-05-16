@@ -5,6 +5,8 @@
 //   node src/bench.js 100000 10
 
 import { sma, ema, rsi, atr } from "./indicators.js";
+import { scanPatterns }       from "./patterns.js";
+import { Bar }                 from "./types.js";
 
 function genSeries(n) {
     // Deterministic walk shared bit-for-bit across all four language benches.
@@ -37,11 +39,20 @@ function main() {
     console.log(`# iterations\t${iters}`);
     console.log("indicator\ttotal_ns\tns_per_iter");
 
+    const bars = new Array(n);
+    for (let i = 0; i < n; i++) {
+        bars[i] = new Bar({
+            timestamp: i, open: src[i], high: hi[i], low: lo[i],
+            close: src[i] + 0.001 * (i % 7 - 3), volume: 1,
+        });
+    }
+
     const cases = [
         ["sma20", () => sma(src, 20)],
         ["ema50", () => ema(src, 50)],
         ["rsi14", () => rsi(src, 14)],
         ["atr14", () => atr(hi, lo, src, 14)],
+        ["pscan", () => scanPatterns(bars)],
     ];
     for (const [label, fn] of cases) {
         const [total, per] = timed(fn, iters);

@@ -8,7 +8,9 @@
 
 extern "C" {
 #include "indicators/indicators.h"
+#include "patterns/pattern_types.h"
 }
+#include "patterns/pattern_engine.hpp"
 
 static std::vector<double> gen_series(size_t n) {
     std::vector<double> out(n);
@@ -36,6 +38,18 @@ int main(int argc, char **argv) {
     auto src = gen_series(n);
     std::vector<double> hi(n), lo(n), out(n);
     for (size_t i = 0; i < n; ++i) { hi[i] = src[i] + 0.5; lo[i] = src[i] - 0.5; }
+    std::vector<AF_Bar> bars(n);
+    for (size_t i = 0; i < n; ++i) {
+        bars[i] = {};
+        bars[i].timestamp = static_cast<int64_t>(i);
+        bars[i].open  = src[i];
+        bars[i].close = src[i] + 0.001 * (static_cast<int>(i % 7) - 3);
+        bars[i].high  = hi[i]; bars[i].low = lo[i];
+        bars[i].volume = 1.0;
+        af_bar_init(&bars[i]);
+    }
+    af::PatternEngine eng;
+    eng.register_all();
 
     std::printf("# language\tcpp\n");
     std::printf("# bars\t%zu\n", n);
@@ -50,6 +64,8 @@ int main(int argc, char **argv) {
     std::printf("rsi14\t%lld\t%lld\n", r_total, r_per);
     auto [a_total, a_per] = timed([&]{ af_atr(hi.data(), lo.data(), src.data(), n, 14, out.data()); }, iters);
     std::printf("atr14\t%lld\t%lld\n", a_total, a_per);
+    auto [p_total, p_per] = timed([&]{ (void)eng.scan(bars.data(), n); }, iters);
+    std::printf("pscan\t%lld\t%lld\n", p_total, p_per);
 
     return 0;
 }

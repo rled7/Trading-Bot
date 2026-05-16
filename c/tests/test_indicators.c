@@ -161,7 +161,7 @@ static void test_atr_insufficient_data(void) {
 }
 
 /* ── runner ────────────────────────────────────────────────────────────── */
-int main(void) {
+void test_indicators_run(int *total_passed, int *total_failed) {
     /* legacy smoke checks from test_smoke.c — keep them. */
     CHK(AF_TF_H1 == 3600);
     CHK(AF_DIR_LONG == 1);
@@ -190,6 +190,6 @@ int main(void) {
     test_atr_constant_range();
     test_atr_insufficient_data();
 
-    printf("  COMPLETE | Passed: %d | Failed: %d\n", g_passed, g_failed);
-    return g_failed ? 1 : 0;
+    *total_passed += g_passed;
+    *total_failed += g_failed;
 }

@@ -19,10 +19,10 @@ registry, risk rules) but no code.
 
 | Project   | Test entry                                    | Bench entry                         | Tests |
 |-----------|-----------------------------------------------|-------------------------------------|-------|
-| c/        | `make -C c test`                              | `make -C c bench && c/build/af_bench`           | 18    |
+| c/        | `make -C c test`                              | `make -C c bench && c/build/af_bench`           | 41    |
 | cpp/      | `cpp/build/Release/af_tests`                  | `cpp/build/Release/af_bench`                    | 102   |
-| python/   | `(cd python && PYTHONPATH=. python3 -m unittest discover tests)` | `(cd python && PYTHONPATH=. python3 -m algoforge.bench)` | 25    |
-| js/       | `npm --prefix js test`                        | `npm --prefix js run bench`                     | 25    |
+| python/   | `(cd python && PYTHONPATH=. python3 -m unittest discover tests)` | `(cd python && PYTHONPATH=. python3 -m algoforge.bench)` | 47    |
+| js/       | `npm --prefix js test`                        | `npm --prefix js run bench`                     | 47    |
 
 Each language's bench accepts `[bars] [iterations]` positional args (defaults
 100000 / 10) and prints a TSV with `# language` / `# bars` / `# iterations`
@@ -53,8 +53,8 @@ make -C c test \
 |-------------------------|-----|-----|--------|-----|
 | 1. Foundation           | —   | ⚠️  | —      | —   |
 | 2. Data Pipeline        | —   | ⚠️  | —      | —   |
-| 3. Indicators           | —   | ⚠️  | —      | —   |
-| 4. Pattern Engine       | —   | ⚠️  | —      | —   |
+| 3. Indicators           | ⚠️  | ⚠️  | ⚠️     | ⚠️  |
+| 4. Pattern Engine       | ⚠️  | ⚠️  | ⚠️     | ⚠️  |
 | 5. Multi-TF Confluence  | —   | ❌  | —      | —   |
 | 6. Risk & Execution     | —   | ⚠️  | —      | —   |
 | 7. Built-in Algorithms  | —   | ⚠️  | —      | —   |
