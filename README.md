@@ -17,12 +17,26 @@ registry, risk rules) but no code.
 
 ## Project status
 
-| Project   | Build entry            | Tests passing |
-|-----------|------------------------|---------------|
-| c/        | `cd c && make test`    | 1 / 1         |
-| cpp/      | `cd cpp && cmake -B build/Release && cmake --build build/Release && ./build/Release/af_tests` | 102 / 102 |
-| python/   | `cd python && python -m unittest discover tests` | 1 / 1 |
-| js/       | `cd js && npm test`    | 1 / 1         |
+| Project   | Test entry                                    | Bench entry                         | Tests |
+|-----------|-----------------------------------------------|-------------------------------------|-------|
+| c/        | `make -C c test`                              | `make -C c bench && c/build/af_bench`           | 18    |
+| cpp/      | `cpp/build/Release/af_tests`                  | `cpp/build/Release/af_bench`                    | 102   |
+| python/   | `(cd python && PYTHONPATH=. python3 -m unittest discover tests)` | `(cd python && PYTHONPATH=. python3 -m algoforge.bench)` | 25    |
+| js/       | `npm --prefix js test`                        | `npm --prefix js run bench`                     | 25    |
+
+Each language's bench accepts `[bars] [iterations]` positional args (defaults
+100000 / 10) and prints a TSV with `# language` / `# bars` / `# iterations`
+headers followed by `indicator\ttotal_ns\tns_per_iter` rows — same format
+across all four projects.
+
+## Cross-language benchmark
+
+```bash
+benchmarks/run_all.sh [bars] [iterations]
+```
+
+Runs the same SMA(20), EMA(50), RSI(14), ATR(14) workload on a deterministic
+100k-bar walk in every project and prints a comparison table.
 
 Run all four:
 

@@ -21,6 +21,13 @@ python -m unittest discover tests   # zero deps
 pytest                              # if dev extras installed
 ```
 
+## Benchmark
+
+```bash
+PYTHONPATH=. python3 -m algoforge.bench [bars] [iterations]
+# defaults: 100000 bars, 10 iterations
+```
+
 ## Layout
 
 ```

@@ -31,6 +31,9 @@ cp ../../algoforge.ini.example algoforge.ini
 
 # 6. Run tests
 ./af_tests
+
+# 7. Run benchmark (cross-language compatible TSV format)
+./af_bench 100000 10
 ```
 
 ---

@@ -9,6 +9,8 @@ Pure C17 implementation of the AlgoForge blueprint.
 ```bash
 make            # builds build/algoforge
 make test       # builds build/af_tests and runs them
+make bench      # builds build/af_bench
+./build/af_bench [bars] [iterations]   # defaults: 100000 10
 make clean
 ```
 

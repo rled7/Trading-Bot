@@ -9,8 +9,9 @@ runtime dependencies for the scaffold.
 
 ```bash
 cd js
-npm start        # runs src/index.js
-npm test         # runs the smoke tests
+npm start                            # runs src/index.js
+npm test                             # runs all tests
+npm run bench -- 100000 10           # or: node src/bench.js 100000 10
 ```
 
 ## Layout

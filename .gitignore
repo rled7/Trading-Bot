@@ -30,10 +30,15 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
-# Executables
-algoforge
-af_backtest
-af_tests
+# Compiled binaries — already ignored via build/ above, but be explicit.
+# (Bare names like "algoforge" would match the python/algoforge package, so anchor.)
+cpp/build/**/algoforge
+cpp/build/**/af_backtest
+cpp/build/**/af_tests
+cpp/build/**/af_bench
+c/build/algoforge
+c/build/af_tests
+c/build/af_bench
 
 # Editor / IDE
 .vscode/

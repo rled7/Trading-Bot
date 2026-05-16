@@ -2,30 +2,37 @@ CC      ?= gcc
 CFLAGS  ?= -std=c17 -Wall -Wextra -Werror -O2 -Iinclude
 LDFLAGS ?=
 
-BUILD   := build
-SRC     := src
-TESTS   := tests
-BIN     := $(BUILD)/algoforge
-TESTBIN := $(BUILD)/af_tests
+BUILD     := build
+SRC       := src
+TESTS     := tests
 
-SRCS  := $(wildcard $(SRC)/*.c)
-TSRCS := $(filter-out $(SRC)/main.c,$(SRCS)) $(wildcard $(TESTS)/*.c)
+BIN_MAIN  := $(BUILD)/algoforge
+BIN_BENCH := $(BUILD)/af_bench
+BIN_TEST  := $(BUILD)/af_tests
 
-.PHONY: all bin test clean
+# Library sources = everything in src/ except entry-points.
+LIB_SRCS  := $(filter-out $(SRC)/main.c $(SRC)/bench.c,$(wildcard $(SRC)/*.c))
+TEST_SRCS := $(wildcard $(TESTS)/*.c)
+
+.PHONY: all bin bench test clean
 all: bin
 
-bin: $(BIN)
+bin:   $(BIN_MAIN)
+bench: $(BIN_BENCH)
+test:  $(BIN_TEST)
+	./$(BIN_TEST)
 
-$(BIN): $(SRCS)
+$(BIN_MAIN): $(SRC)/main.c $(LIB_SRCS)
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-$(TESTBIN): $(TSRCS)
+$(BIN_BENCH): $(SRC)/bench.c $(LIB_SRCS)
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-test: $(TESTBIN)
-	./$(TESTBIN)
+$(BIN_TEST): $(TEST_SRCS) $(LIB_SRCS)
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 clean:
 	rm -rf $(BUILD)
