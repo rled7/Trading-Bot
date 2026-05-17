@@ -42,4 +42,40 @@ af_error_t af_adx(const double *high, const double *low, const double *close,
                   size_t n, size_t period,
                   double *adx_out, double *plus_di, double *minus_di);
 
+/* WMA: weighted moving average; weight of most-recent bar = period,
+   next = period-1, ..., oldest = 1. Sum of weights = period*(period+1)/2. */
+af_error_t af_wma(const double *src, size_t n, size_t period, double *out);
+
+/* CCI: (TP - SMA(TP,period)) / (constant * mean_abs_deviation(TP,period))
+   where TP = (high + low + close) / 3. */
+af_error_t af_cci(const double *high, const double *low, const double *close,
+                  size_t n, size_t period, double constant, double *out);
+
+/* Williams %R = -100 * (highest_high - close) / (highest_high - lowest_low)
+   over a rolling window of `period` bars. */
+af_error_t af_williams_r(const double *high, const double *low, const double *close,
+                          size_t n, size_t period, double *out);
+
+/* ROC: rate of change = (close[i] - close[i-period]) / close[i-period] * 100. */
+af_error_t af_roc(const double *src, size_t n, size_t period, double *out);
+
+/* MFI: money flow index.  Positive/negative money flow over `period` bars,
+   then 100 - 100/(1 + pos_flow/neg_flow).  Returns AF_ERR_INVALID_PARAM if
+   any pointer is NULL; returns AF_ERR_IO if n <= period. */
+af_error_t af_mfi(const double *high, const double *low, const double *close,
+                  const double *volume, size_t n, size_t period, double *out);
+
+/* VWAP: cumulative (TP*volume) / cumulative volume from bar 0.
+   No session reset.  Returns AF_ERR_INVALID_PARAM if any pointer is NULL. */
+af_error_t af_vwap(const double *high, const double *low, const double *close,
+                   const double *volume, size_t n, double *out);
+
+/* Keltner Channels:
+     middle = EMA(close, ema_period)
+     upper  = middle + mult * ATR(ema_period=atr_period)
+     lower  = middle - mult * ATR */
+af_error_t af_keltner(const double *high, const double *low, const double *close,
+                      size_t n, size_t ema_period, size_t atr_period, double mult,
+                      double *upper, double *middle, double *lower);
+
 #endif /* AF_INDICATORS_H */

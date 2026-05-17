@@ -35,6 +35,12 @@ int af_is_three_black_crows  (double b0_o, double b0_h, double b0_l, double b0_c
                                 double b1_o, double b1_h, double b1_l, double b1_c,
                                 double b2_o, double b2_h, double b2_l, double b2_c);
 
+/* Chart patterns — require a bar array; return +1 (bullish), -1 (bearish), or 0. */
+int af_is_double_top          (const af_bar_t *bars, size_t n); /* needs n >= 30 */
+int af_is_double_bottom       (const af_bar_t *bars, size_t n); /* needs n >= 30 */
+int af_is_ascending_triangle  (const af_bar_t *bars, size_t n); /* needs n >= 20 */
+int af_is_descending_triangle (const af_bar_t *bars, size_t n); /* needs n >= 20 */
+
 /* Match record produced by af_scan_patterns. */
 typedef struct {
     int         bar_index;

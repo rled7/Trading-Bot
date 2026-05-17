@@ -132,6 +132,90 @@ export function isThreeBlackCrows(b0, b1, b2) {
     return -1;
 }
 
+// ── Chart Pattern Helpers ─────────────────────────────────────────────────────
+
+function maxRange(bars, from, to) {
+    let mx = bars[from].high;
+    for (let i = from + 1; i <= to; i++) {
+        if (bars[i].high > mx) mx = bars[i].high;
+    }
+    return mx;
+}
+
+function minRange(bars, from, to) {
+    let mn = bars[from].low;
+    for (let i = from + 1; i <= to; i++) {
+        if (bars[i].low < mn) mn = bars[i].low;
+    }
+    return mn;
+}
+
+// ── Double Top ────────────────────────────────────────────────────────────────
+// Bearish reversal. Two similar highs separated by at least 10 bars (n/2 split),
+// with a valley below and closing below midpoint. Matches cpp/ DoubleTop.
+export function isDoubleTop(bars) {
+    const n = bars.length;
+    if (n < 30) return 0;
+    const mid = Math.floor(n / 2);
+    const hi1 = maxRange(bars, 0, mid - 1);
+    const lo  = minRange(bars, 0, n - 1);
+    const hi2 = maxRange(bars, mid, n - 1);
+    const tol = (hi1 + hi2) * 0.005;
+    if (Math.abs(hi1 - hi2) <= tol && lo < hi1 * 0.99 && bars[n - 1].close < (hi1 + lo) / 2.0) {
+        return -1;
+    }
+    return 0;
+}
+
+// ── Double Bottom ─────────────────────────────────────────────────────────────
+// Bullish reversal. Two similar lows separated by at least 10 bars (n/2 split),
+// with a peak above and closing above midpoint. Matches cpp/ DoubleBottom.
+export function isDoubleBottom(bars) {
+    const n = bars.length;
+    if (n < 30) return 0;
+    const mid = Math.floor(n / 2);
+    const lo1 = minRange(bars, 0, mid - 1);
+    const hi  = maxRange(bars, 0, n - 1);
+    const lo2 = minRange(bars, mid, n - 1);
+    const tol = (lo1 + lo2) * 0.005;
+    if (Math.abs(lo1 - lo2) <= tol && hi > lo1 * 1.01 && bars[n - 1].close > (lo1 + hi) / 2.0) {
+        return 1;
+    }
+    return 0;
+}
+
+// ── Ascending Triangle ────────────────────────────────────────────────────────
+// Bullish. Flat resistance with rising lows over last 20 bars.
+// Matches cpp/ AscendingTriangle.
+export function isAscendingTriangle(bars) {
+    const n = bars.length;
+    if (n < 20) return 0;
+    const resistance = maxRange(bars, n - 20, n - 1);
+    const loFirst    = minRange(bars, n - 20, n - 11);
+    const loLast     = minRange(bars, n - 10, n - 1);
+    const hiVar      = maxRange(bars, n - 20, n - 11) - maxRange(bars, n - 10, n - 1);
+    if (loLast > loFirst * 1.002 && Math.abs(hiVar) < resistance * 0.005) {
+        return 1;
+    }
+    return 0;
+}
+
+// ── Descending Triangle ───────────────────────────────────────────────────────
+// Bearish. Flat support with falling highs over last 20 bars.
+// Matches cpp/ DescendingTriangle.
+export function isDescendingTriangle(bars) {
+    const n = bars.length;
+    if (n < 20) return 0;
+    const support  = minRange(bars, n - 20, n - 1);
+    const hiFirst  = maxRange(bars, n - 20, n - 11);
+    const hiLast   = maxRange(bars, n - 10, n - 1);
+    const loVar    = minRange(bars, n - 20, n - 11) - minRange(bars, n - 10, n - 1);
+    if (hiLast < hiFirst * 0.998 && Math.abs(loVar) < support * 0.005) {
+        return -1;
+    }
+    return 0;
+}
+
 export class PatternMatch {
     constructor(barIndex, name, signal) {
         this.barIndex = barIndex;
@@ -168,6 +252,19 @@ export function scanPatterns(bars) {
                 out.push(new PatternMatch(i, "three_black_crows", s));
             }
         }
+    }
+    // Chart patterns — only checked once when we have enough bars.
+    // barIndex for chart patterns is always bars.length - 1 (the latest bar).
+    const last = bars.length - 1;
+    if (bars.length >= 30) {
+        let s;
+        if ((s = isDoubleTop(bars)))    out.push(new PatternMatch(last, "double_top",    s));
+        if ((s = isDoubleBottom(bars))) out.push(new PatternMatch(last, "double_bottom", s));
+    }
+    if (bars.length >= 20) {
+        let s;
+        if ((s = isAscendingTriangle(bars)))  out.push(new PatternMatch(last, "ascending_triangle",  s));
+        if ((s = isDescendingTriangle(bars))) out.push(new PatternMatch(last, "descending_triangle", s));
     }
     return out;
 }

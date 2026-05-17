@@ -311,3 +311,148 @@ af_error_t af_adx(const double *high, const double *low, const double *close,
     free(tr); free(pdm); free(mdm);
     return AF_OK;
 }
+
+/* ── WMA ───────────────────────────────────────────────────────────────── */
+af_error_t af_wma(const double *src, size_t n, size_t period, double *out) {
+    if (!src || !out || period == 0) return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+    if (n < period) return AF_ERR_IO;
+    /* wsum = period*(period+1)/2 */
+    double wsum = (double)period * ((double)period + 1.0) / 2.0;
+    for (size_t i = period - 1; i < n; ++i) {
+        double s = 0.0;
+        for (size_t j = 0; j < period; ++j) {
+            /* bar at (i - (period-1-j)) gets weight (j+1) */
+            s += src[i - (period - 1 - j)] * (double)(j + 1);
+        }
+        out[i] = s / wsum;
+    }
+    return AF_OK;
+}
+
+/* ── CCI ───────────────────────────────────────────────────────────────── */
+af_error_t af_cci(const double *high, const double *low, const double *close,
+                  size_t n, size_t period, double constant, double *out) {
+    if (!high || !low || !close || !out || period == 0) return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+    if (n < period) return AF_ERR_IO;
+    for (size_t i = period - 1; i < n; ++i) {
+        /* Mean of TP over window */
+        double sum = 0.0;
+        for (size_t j = 0; j < period; ++j)
+            sum += (high[i - j] + low[i - j] + close[i - j]) / 3.0;
+        double mean = sum / (double)period;
+        /* Mean absolute deviation */
+        double mad = 0.0;
+        for (size_t j = 0; j < period; ++j) {
+            double tp = (high[i - j] + low[i - j] + close[i - j]) / 3.0;
+            double d = tp - mean;
+            mad += (d < 0.0 ? -d : d);
+        }
+        mad /= (double)period;
+        double tp_i = (high[i] + low[i] + close[i]) / 3.0;
+        out[i] = (mad > 1e-12) ? (tp_i - mean) / (constant * mad) : 0.0;
+    }
+    return AF_OK;
+}
+
+/* ── Williams %R ───────────────────────────────────────────────────────── */
+af_error_t af_williams_r(const double *high, const double *low, const double *close,
+                          size_t n, size_t period, double *out) {
+    if (!high || !low || !close || !out || period == 0) return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+    if (n < period) return AF_ERR_IO;
+    for (size_t i = period - 1; i < n; ++i) {
+        double hi = high[i], lo = low[i];
+        for (size_t j = 1; j < period; ++j) {
+            if (high[i - j] > hi) hi = high[i - j];
+            if (low[i - j]  < lo) lo = low[i - j];
+        }
+        double r = hi - lo;
+        out[i] = (r > 1e-12) ? -100.0 * (hi - close[i]) / r : -50.0;
+    }
+    return AF_OK;
+}
+
+/* ── ROC ───────────────────────────────────────────────────────────────── */
+af_error_t af_roc(const double *src, size_t n, size_t period, double *out) {
+    if (!src || !out || period == 0) return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+    if (n <= period) return AF_ERR_IO;
+    for (size_t i = period; i < n; ++i) {
+        double p = src[i - period];
+        out[i] = (p > 1e-12 || p < -1e-12) ? (src[i] - p) / p * 100.0 : 0.0;
+    }
+    return AF_OK;
+}
+
+/* ── MFI ───────────────────────────────────────────────────────────────── */
+af_error_t af_mfi(const double *high, const double *low, const double *close,
+                  const double *volume, size_t n, size_t period, double *out) {
+    if (!high || !low || !close || !volume || !out || period == 0)
+        return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+    if (n <= period) return AF_ERR_IO;
+    for (size_t i = period; i < n; ++i) {
+        double pmf = 0.0, nmf = 0.0;
+        for (size_t j = 0; j < period; ++j) {
+            size_t k = i - j;
+            double tp = (high[k] + low[k] + close[k]) / 3.0;
+            double mf = tp * volume[k];
+            /* Compare TP to previous bar's TP */
+            double pp = (k > 0) ? (high[k-1] + low[k-1] + close[k-1]) / 3.0 : tp;
+            if (tp >= pp) pmf += mf;
+            else          nmf += mf;
+        }
+        double r = (nmf > 1e-12) ? pmf / nmf : 100.0;
+        out[i] = 100.0 - 100.0 / (1.0 + r);
+    }
+    return AF_OK;
+}
+
+/* ── VWAP ──────────────────────────────────────────────────────────────── */
+af_error_t af_vwap(const double *high, const double *low, const double *close,
+                   const double *volume, size_t n, double *out) {
+    if (!high || !low || !close || !volume || !out) return AF_ERR_INVALID_PARAM;
+    if (n == 0) return AF_ERR_IO;
+    double cpv = 0.0, cv = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        double vv = volume[i] > 0.0 ? volume[i] : 1.0;
+        double tp = (high[i] + low[i] + close[i]) / 3.0;
+        cpv += tp * vv;
+        cv  += vv;
+        out[i] = cpv / cv;
+    }
+    return AF_OK;
+}
+
+/* ── Keltner Channels ──────────────────────────────────────────────────── */
+af_error_t af_keltner(const double *high, const double *low, const double *close,
+                      size_t n, size_t ema_period, size_t atr_period, double mult,
+                      double *upper, double *middle, double *lower) {
+    if (!high || !low || !close || !upper || !middle || !lower) return AF_ERR_INVALID_PARAM;
+    if (ema_period == 0 || atr_period == 0) return AF_ERR_INVALID_PARAM;
+    fill_nan(upper, n);
+    fill_nan(lower, n);
+
+    /* middle = EMA(close, ema_period) */
+    af_error_t rc = af_ema(close, n, ema_period, middle);
+    if (rc != AF_OK) return rc;
+
+    /* ATR scratch buffer */
+    double *atr = (double*)malloc(n * sizeof(double));
+    if (!atr) return AF_ERR_IO;
+    af_atr(high, low, close, n, atr_period, atr);
+
+    for (size_t i = 0; i < n; ++i) {
+        if (is_nan(middle[i]) || is_nan(atr[i])) {
+            upper[i] = AF_NAN;
+            lower[i] = AF_NAN;
+            continue;
+        }
+        upper[i] = middle[i] + mult * atr[i];
+        lower[i] = middle[i] - mult * atr[i];
+    }
+    free(atr);
+    return AF_OK;
+}

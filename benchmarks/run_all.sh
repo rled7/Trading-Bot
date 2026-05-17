@@ -56,7 +56,7 @@ echo "Summary — ns / iteration / indicator"
 echo "─────────────────────────────────────────────────"
 printf "%-10s %12s %12s %12s %12s\n" "indicator" "c" "cpp" "python" "js"
 
-for ind in sma20 ema50 rsi14 atr14 macd bollinger stoch obv adx pscan; do
+for ind in sma20 ema50 rsi14 atr14 macd bollinger stoch obv adx wma cci williamsR roc mfi vwap keltner pscan; do
     cval=$(  awk -v i="$ind" '$1==i {print $3}' /tmp/af_bench_c.tsv)
     cppval=$(awk -v i="$ind" '$1==i {print $3}' /tmp/af_bench_cpp.tsv)
     pyval=$( awk -v i="$ind" '$1==i {print $3}' /tmp/af_bench_python.tsv)

@@ -4,7 +4,11 @@
 //   npm run bench
 //   node src/bench.js 100000 10
 
-import { sma, ema, rsi, atr, macd, bollinger, stochastic, obv, adx } from "./indicators.js";
+import {
+    sma, ema, rsi, atr,
+    macd, bollinger, stochastic, obv, adx,
+    wma, cci, williamsR, roc, mfi, vwap, keltner,
+} from "./indicators.js";
 import { scanPatterns }       from "./patterns.js";
 import { Bar }                 from "./types.js";
 
@@ -58,6 +62,13 @@ function main() {
         ["stoch",     () => stochastic(hi, lo, src, 14, 3)],
         ["obv",       () => obv(src, vol)],
         ["adx",       () => adx(hi, lo, src, 14)],
+        ["wma",       () => wma(src, 20)],
+        ["cci",       () => cci(hi, lo, src, 20, 0.015)],
+        ["williamsR", () => williamsR(hi, lo, src, 14)],
+        ["roc",       () => roc(src, 10)],
+        ["mfi",       () => mfi(hi, lo, src, vol, 14)],
+        ["vwap",      () => vwap(hi, lo, src, vol)],
+        ["keltner",   () => keltner(hi, lo, src, 20, 10, 2.0)],
         ["pscan",     () => scanPatterns(bars)],
     ];
     for (const [label, fn] of cases) {

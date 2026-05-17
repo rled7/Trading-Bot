@@ -64,6 +64,13 @@ int main(int argc, char **argv) {
     TIMED("stoch",     af_stochastic(hi, lo, src, n, 14, 3, out, aux1));
     TIMED("obv",       af_obv(src, vol, n, out));
     TIMED("adx",       af_adx(hi, lo, src, n, 14, out, aux1, aux2));
+    TIMED("wma",       af_wma(src, n, 20, out));
+    TIMED("cci",       af_cci(hi, lo, src, n, 20, 0.015, out));
+    TIMED("williamsR", af_williams_r(hi, lo, src, n, 14, out));
+    TIMED("roc",       af_roc(src, n, 10, out));
+    TIMED("mfi",       af_mfi(hi, lo, src, vol, n, 14, out));
+    TIMED("vwap",      af_vwap(hi, lo, src, vol, n, out));
+    TIMED("keltner",   af_keltner(hi, lo, src, n, 20, 10, 2.0, out, aux1, aux2));
 
     /* Pattern scan over a bar array. */
     af_bar_t *bars = (af_bar_t*)malloc(n * sizeof(af_bar_t));

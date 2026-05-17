@@ -255,6 +255,173 @@ export function obv(closes, volumes) {
     return out;
 }
 
+// ── WMA (Weighted Moving Average) ────────────────────────────────────────────
+// Most recent bar gets weight = period, oldest gets weight = 1.
+// sum of weights = period*(period+1)/2. Matches cpp/ af_wma.
+export function wma(values, period) {
+    checkPeriod(period);
+    const n = values.length;
+    const out = new Array(n).fill(null);
+    if (n < period) return out;
+
+    const wsum = period * (period + 1) / 2;
+    for (let i = period - 1; i < n; i++) {
+        let s = 0;
+        for (let j = 0; j < period; j++) {
+            s += values[i - (period - 1 - j)] * (j + 1);
+        }
+        out[i] = s / wsum;
+    }
+    return out;
+}
+
+// ── CCI (Commodity Channel Index) ────────────────────────────────────────────
+// TP = (H+L+C)/3; CCI = (TP - SMA(TP)) / (constant * mean_abs_dev(TP))
+// Matches cpp/ af_cci.
+export function cci(highs, lows, closes, period = 20, constant = 0.015) {
+    checkPeriod(period);
+    const n = highs.length;
+    if (lows.length !== n || closes.length !== n) {
+        throw new Error("highs, lows, closes must all have the same length");
+    }
+    const out = new Array(n).fill(null);
+    if (n < period) return out;
+
+    const EPSILON = 1e-10;
+    for (let i = period - 1; i < n; i++) {
+        let sum = 0;
+        for (let j = 0; j < period; j++) {
+            sum += (highs[i - j] + lows[i - j] + closes[i - j]) / 3.0;
+        }
+        const mean = sum / period;
+        let mad = 0;
+        for (let j = 0; j < period; j++) {
+            mad += Math.abs((highs[i - j] + lows[i - j] + closes[i - j]) / 3.0 - mean);
+        }
+        mad /= period;
+        const tp = (highs[i] + lows[i] + closes[i]) / 3.0;
+        out[i] = mad > EPSILON ? (tp - mean) / (constant * mad) : 0.0;
+    }
+    return out;
+}
+
+// ── Williams %R ───────────────────────────────────────────────────────────────
+// = -100 * (highest_high - close) / (highest_high - lowest_low)
+// Returns -50 when range is zero (matches cpp/ af_williams_r).
+export function williamsR(highs, lows, closes, period = 14) {
+    checkPeriod(period);
+    const n = highs.length;
+    if (lows.length !== n || closes.length !== n) {
+        throw new Error("highs, lows, closes must all have the same length");
+    }
+    const out = new Array(n).fill(null);
+    if (n < period) return out;
+
+    const EPSILON = 1e-10;
+    for (let i = period - 1; i < n; i++) {
+        let hi = highs[i], lo = lows[i];
+        for (let j = 1; j < period; j++) {
+            if (highs[i - j] > hi) hi = highs[i - j];
+            if (lows[i - j]  < lo) lo = lows[i - j];
+        }
+        const r = hi - lo;
+        out[i] = r > EPSILON ? -100.0 * (hi - closes[i]) / r : -50.0;
+    }
+    return out;
+}
+
+// ── ROC (Rate of Change) ──────────────────────────────────────────────────────
+// = 100 * (close[i] - close[i-period]) / close[i-period]
+// Returns 0 when past price is ~0. First valid index: period (not period-1).
+// Matches cpp/ af_roc (n <= period guard → first valid at index period).
+export function roc(values, period) {
+    checkPeriod(period);
+    const n = values.length;
+    const out = new Array(n).fill(null);
+    if (n <= period) return out;
+
+    const EPSILON = 1e-10;
+    for (let i = period; i < n; i++) {
+        const p = values[i - period];
+        out[i] = Math.abs(p) > EPSILON ? (values[i] - p) / p * 100.0 : 0.0;
+    }
+    return out;
+}
+
+// ── MFI (Money Flow Index) ───────────────────────────────────────────────────
+// Typical price money flow; 100 - 100/(1 + pos/neg).
+// Comparison: tp >= prev_tp → positive money flow (matches cpp/ af_mfi).
+// First valid index: period (guard n <= period).
+export function mfi(highs, lows, closes, volumes, period = 14) {
+    checkPeriod(period);
+    const n = highs.length;
+    if (lows.length !== n || closes.length !== n || volumes.length !== n) {
+        throw new Error("highs, lows, closes, volumes must all have the same length");
+    }
+    const out = new Array(n).fill(null);
+    if (n <= period) return out;
+
+    const EPSILON = 1e-10;
+    for (let i = period; i < n; i++) {
+        let pmf = 0, nmf = 0;
+        for (let j = 0; j < period; j++) {
+            const k = i - j;
+            const tp = (highs[k] + lows[k] + closes[k]) / 3.0;
+            const mflow = tp * volumes[k];
+            const pp = k > 0 ? (highs[k - 1] + lows[k - 1] + closes[k - 1]) / 3.0 : tp;
+            if (tp >= pp) pmf += mflow;
+            else          nmf += mflow;
+        }
+        const r = nmf > EPSILON ? pmf / nmf : 100.0;
+        out[i] = 100.0 - 100.0 / (1.0 + r);
+    }
+    return out;
+}
+
+// ── VWAP (Volume Weighted Average Price) ─────────────────────────────────────
+// Cumulative (TP*vol)/cumulative vol. Volume 0 treated as 1 (matches cpp/ af_vwap).
+export function vwap(highs, lows, closes, volumes) {
+    const n = highs.length;
+    if (lows.length !== n || closes.length !== n || volumes.length !== n) {
+        throw new Error("highs, lows, closes, volumes must all have the same length");
+    }
+    const out = new Array(n);
+    if (n === 0) return out;
+
+    let cpv = 0, cv = 0;
+    for (let i = 0; i < n; i++) {
+        const vv = volumes[i] > 0 ? volumes[i] : 1;
+        const tp = (highs[i] + lows[i] + closes[i]) / 3.0;
+        cpv += tp * vv;
+        cv  += vv;
+        out[i] = cpv / cv;
+    }
+    return out;
+}
+
+// ── Keltner Channel ───────────────────────────────────────────────────────────
+// middle = EMA(close, emaPeriod); upper/lower = middle ± mult * ATR(atrPeriod)
+// Matches cpp/ af_keltner.
+export function keltner(highs, lows, closes, emaPeriod = 20, atrPeriod = 10, mult = 2.0) {
+    checkPeriod(emaPeriod);
+    checkPeriod(atrPeriod);
+    const n = highs.length;
+    if (lows.length !== n || closes.length !== n) {
+        throw new Error("highs, lows, closes must all have the same length");
+    }
+    const middle = ema(closes, emaPeriod);
+    const atrArr = atr(highs, lows, closes, atrPeriod);
+    const upper  = new Array(n).fill(null);
+    const lower  = new Array(n).fill(null);
+
+    for (let i = 0; i < n; i++) {
+        if (middle[i] === null || atrArr[i] === null) continue;
+        upper[i] = middle[i] + mult * atrArr[i];
+        lower[i] = middle[i] - mult * atrArr[i];
+    }
+    return { upper, middle, lower };
+}
+
 // ── ADX (Average Directional Index) ──────────────────────────────────────────
 // Wilder smoothing (alpha = 1/period) over TR, +DM, -DM.
 // Requires n >= 2*period + 1 (matching cpp/ af_adx guard).

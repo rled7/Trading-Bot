@@ -78,6 +78,20 @@ int main(int argc, char **argv) {
     std::printf("obv\t%lld\t%lld\n", obv_t, obv_p);
     auto [adx_t, adx_p]   = timed([&]{ af_adx(hi.data(), lo.data(), src.data(), n, 14, out.data(), aux1.data(), aux2.data()); }, iters);
     std::printf("adx\t%lld\t%lld\n", adx_t, adx_p);
+    auto [wma_t, wma_p]   = timed([&]{ af_wma(src.data(), n, 20, out.data()); }, iters);
+    std::printf("wma\t%lld\t%lld\n", wma_t, wma_p);
+    auto [cci_t, cci_p]   = timed([&]{ af_cci(hi.data(), lo.data(), src.data(), n, 20, 0.015, out.data()); }, iters);
+    std::printf("cci\t%lld\t%lld\n", cci_t, cci_p);
+    auto [wr_t, wr_p]     = timed([&]{ af_williams_r(hi.data(), lo.data(), src.data(), n, 14, out.data()); }, iters);
+    std::printf("williamsR\t%lld\t%lld\n", wr_t, wr_p);
+    auto [roc_t, roc_p]   = timed([&]{ af_roc(src.data(), n, 10, out.data()); }, iters);
+    std::printf("roc\t%lld\t%lld\n", roc_t, roc_p);
+    auto [mfi_t, mfi_p]   = timed([&]{ af_mfi(hi.data(), lo.data(), src.data(), vol.data(), n, 14, out.data()); }, iters);
+    std::printf("mfi\t%lld\t%lld\n", mfi_t, mfi_p);
+    auto [vwap_t, vwap_p] = timed([&]{ af_vwap(hi.data(), lo.data(), src.data(), vol.data(), n, out.data(), aux1.data(), aux2.data(), nullptr, nullptr); }, iters);
+    std::printf("vwap\t%lld\t%lld\n", vwap_t, vwap_p);
+    auto [kel_t, kel_p]   = timed([&]{ af_keltner(hi.data(), lo.data(), src.data(), n, 20, 10, 2.0, out.data(), aux1.data(), aux2.data()); }, iters);
+    std::printf("keltner\t%lld\t%lld\n", kel_t, kel_p);
     auto [p_total, p_per] = timed([&]{ (void)eng.scan(bars.data(), n); }, iters);
     std::printf("pscan\t%lld\t%lld\n", p_total, p_per);
 

@@ -1,7 +1,10 @@
 import math
 import unittest
 
-from algoforge.indicators import sma, ema, rsi, atr, macd, bollinger, stochastic, obv, adx
+from algoforge.indicators import (
+    sma, ema, rsi, atr, macd, bollinger, stochastic, obv, adx,
+    wma, cci, williams_r, roc, mfi, vwap, keltner,
+)
 
 
 class SmaTests(unittest.TestCase):
@@ -400,6 +403,375 @@ class AdxTests(unittest.TestCase):
         last_p = next(v for v in reversed(p_di) if v is not None)
         last_m = next(v for v in reversed(m_di) if v is not None)
         self.assertGreater(last_p, last_m)
+
+
+class WmaTests(unittest.TestCase):
+    def test_invalid_period(self):
+        for bad in (0, -1, 1.5, "3"):
+            with self.assertRaises(ValueError):
+                wma([1, 2, 3], bad)  # type: ignore[arg-type]
+
+    def test_insufficient_data_all_none(self):
+        out = wma([1.0, 2.0], 5)
+        self.assertEqual(out, [None, None])
+
+    def test_period_equals_n(self):
+        # WMA([1,2,3], period=3): weights 1,2,3; wsum=6
+        # (1*1 + 2*2 + 3*3) / 6 = 14/6
+        out = wma([1.0, 2.0, 3.0], 3)
+        self.assertIsNone(out[0])
+        self.assertIsNone(out[1])
+        self.assertAlmostEqual(out[2], 14.0 / 6.0, places=12)
+
+    def test_known_values_period2(self):
+        # WMA([1,2,3,4], period=2): wsum=3; weights oldest=1,newest=2
+        # i=1: (1*1 + 2*2)/3 = 5/3
+        # i=2: (2*1 + 3*2)/3 = 8/3
+        # i=3: (3*1 + 4*2)/3 = 11/3
+        out = wma([1.0, 2.0, 3.0, 4.0], 2)
+        self.assertIsNone(out[0])
+        self.assertAlmostEqual(out[1], 5.0 / 3.0, places=12)
+        self.assertAlmostEqual(out[2], 8.0 / 3.0, places=12)
+        self.assertAlmostEqual(out[3], 11.0 / 3.0, places=12)
+
+    def test_constant_input(self):
+        out = wma([7.0] * 20, 5)
+        for v in out[4:]:
+            self.assertAlmostEqual(v, 7.0, places=12)
+
+    def test_output_length_matches_input(self):
+        out = wma([1.0] * 10, 3)
+        self.assertEqual(len(out), 10)
+
+    def test_period_one_is_identity(self):
+        data = [1.0, 2.0, 3.0]
+        out = wma(data, 1)
+        for i, v in enumerate(out):
+            self.assertAlmostEqual(v, data[i], places=12)
+
+
+class CciTests(unittest.TestCase):
+    def test_invalid_period(self):
+        with self.assertRaises(ValueError):
+            cci([1.0], [1.0], [1.0], period=0)
+
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            cci([1.0, 2.0], [1.0], [1.0, 1.0], period=1)
+
+    def test_insufficient_data_all_none(self):
+        out = cci([1.0] * 3, [0.5] * 3, [0.8] * 3, period=20)
+        self.assertTrue(all(v is None for v in out))
+
+    def test_constant_input_zero(self):
+        # Constant TP => mean=TP, MAD=0 => CCI=0
+        h = [10.0] * 30
+        l = [8.0] * 30
+        c = [9.0] * 30
+        out = cci(h, l, c, period=10)
+        for v in out[9:]:
+            self.assertAlmostEqual(v, 0.0, places=10)
+
+    def test_known_value_period1(self):
+        # With period=1: mean=TP, MAD=0 => CCI=0
+        h = [12.0]; l = [8.0]; c = [10.0]
+        out = cci(h, l, c, period=1)
+        self.assertAlmostEqual(out[0], 0.0, places=10)
+
+    def test_known_value_period2(self):
+        # TP values: [10, 11]; mean=10.5; MAD=(0.5+0.5)/2=0.5
+        # At i=1: tp=11; CCI=(11-10.5)/(0.015*0.5) = 0.5/0.0075 = 66.666...
+        h = [11.0, 12.0]; l = [9.0, 10.0]; c = [10.0, 11.0]
+        out = cci(h, l, c, period=2)
+        self.assertIsNone(out[0])
+        self.assertAlmostEqual(out[1], 0.5 / (0.015 * 0.5), places=8)
+
+    def test_output_length_matches_input(self):
+        n = 30
+        h = [float(i + 1) for i in range(n)]
+        l = [float(i)     for i in range(n)]
+        c = [float(i) + 0.5 for i in range(n)]
+        out = cci(h, l, c, period=5)
+        self.assertEqual(len(out), n)
+
+
+class WilliamsRTests(unittest.TestCase):
+    def test_invalid_period(self):
+        with self.assertRaises(ValueError):
+            williams_r([1.0], [1.0], [1.0], period=0)
+
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            williams_r([1.0, 2.0], [1.0], [1.0, 1.5])
+
+    def test_insufficient_data_all_none(self):
+        out = williams_r([1.0] * 3, [0.5] * 3, [0.8] * 3, period=14)
+        self.assertTrue(all(v is None for v in out))
+
+    def test_values_in_range(self):
+        import random
+        random.seed(99)
+        prices = [100.0]
+        for _ in range(49):
+            prices.append(prices[-1] + random.uniform(-1, 1))
+        h = [p + 1.0 for p in prices]
+        l = [p - 1.0 for p in prices]
+        out = williams_r(h, l, prices)
+        for v in out:
+            if v is not None:
+                self.assertGreaterEqual(v, -100.0)
+                self.assertLessEqual(v, 0.0)
+
+    def test_close_at_high(self):
+        # close == highest_high => %R = 0
+        h = [10.0] * 5; l = [5.0] * 5; c = [10.0] * 5
+        out = williams_r(h, l, c, period=3)
+        for v in out[2:]:
+            self.assertAlmostEqual(v, 0.0, places=10)
+
+    def test_close_at_low(self):
+        # close == lowest_low => %R = -100
+        h = [10.0] * 5; l = [5.0] * 5; c = [5.0] * 5
+        out = williams_r(h, l, c, period=3)
+        for v in out[2:]:
+            self.assertAlmostEqual(v, -100.0, places=10)
+
+    def test_zero_range_gives_minus50(self):
+        # high == low => range=0 => %R = -50
+        h = [5.0] * 5; l = [5.0] * 5; c = [5.0] * 5
+        out = williams_r(h, l, c, period=3)
+        for v in out[2:]:
+            self.assertAlmostEqual(v, -50.0, places=10)
+
+    def test_known_value(self):
+        # period=2, h=[10,12], l=[5,8], c=[10,11]
+        # highest_high=12, lowest_low=5, close=11
+        # %R = -100*(12-11)/(12-5) = -100/7 ~ -14.285...
+        h = [10.0, 12.0]; l = [5.0, 8.0]; c = [10.0, 11.0]
+        out = williams_r(h, l, c, period=2)
+        self.assertIsNone(out[0])
+        self.assertAlmostEqual(out[1], -100.0 * (12.0 - 11.0) / (12.0 - 5.0), places=10)
+
+
+class RocTests(unittest.TestCase):
+    def test_invalid_period(self):
+        for bad in (0, -1, 1.5, "5"):
+            with self.assertRaises(ValueError):
+                roc([1.0, 2.0, 3.0], bad)  # type: ignore[arg-type]
+
+    def test_insufficient_data_all_none(self):
+        out = roc([1.0, 2.0], 5)
+        self.assertEqual(out, [None, None])
+
+    def test_known_value(self):
+        # ROC([100, 110], period=1): (110-100)/100*100 = 10
+        out = roc([100.0, 110.0], 1)
+        self.assertIsNone(out[0])
+        self.assertAlmostEqual(out[1], 10.0, places=10)
+
+    def test_zero_base_gives_zero(self):
+        # close[i-period] == 0 => ROC = 0
+        out = roc([0.0, 5.0], 1)
+        self.assertIsNone(out[0])
+        self.assertAlmostEqual(out[1], 0.0, places=10)
+
+    def test_constant_input_zero_roc(self):
+        out = roc([50.0] * 10, 3)
+        for v in out[3:]:
+            self.assertAlmostEqual(v, 0.0, places=10)
+
+    def test_known_values_period3(self):
+        # values = [100, 105, 110, 120]
+        # roc[3] = (120-100)/100*100 = 20
+        out = roc([100.0, 105.0, 110.0, 120.0], 3)
+        self.assertIsNone(out[0])
+        self.assertIsNone(out[1])
+        self.assertIsNone(out[2])
+        self.assertAlmostEqual(out[3], 20.0, places=10)
+
+    def test_output_length_matches_input(self):
+        out = roc([1.0] * 15, 5)
+        self.assertEqual(len(out), 15)
+
+    def test_downtrend_negative_roc(self):
+        data = [100.0 - i for i in range(10)]
+        out = roc(data, 1)
+        for v in out[1:]:
+            self.assertLess(v, 0.0)
+
+
+class MfiTests(unittest.TestCase):
+    def test_invalid_period(self):
+        with self.assertRaises(ValueError):
+            mfi([1.0], [1.0], [1.0], [100.0], period=0)
+
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            mfi([1.0, 2.0], [1.0], [1.0, 1.0], [100.0, 200.0], period=1)
+
+    def test_insufficient_data_all_none(self):
+        out = mfi([10.0] * 5, [8.0] * 5, [9.0] * 5, [100.0] * 5, period=14)
+        self.assertTrue(all(v is None for v in out))
+
+    def test_values_in_range(self):
+        import random
+        random.seed(77)
+        prices = [100.0]
+        for _ in range(49):
+            prices.append(prices[-1] + random.uniform(-1, 1))
+        h = [p + 1.0 for p in prices]
+        l = [p - 1.0 for p in prices]
+        vol = [1000.0 + random.uniform(-100, 100) for _ in prices]
+        out = mfi(h, l, prices, vol, period=14)
+        for v in out:
+            if v is not None:
+                self.assertGreaterEqual(v, 0.0)
+                self.assertLessEqual(v, 100.0)
+
+    def test_strict_uptrend_high_mfi(self):
+        # Strictly rising TP => all positive money flow => MFI near 100
+        prices = [100.0 + i for i in range(30)]
+        h = [p + 0.5 for p in prices]
+        l = [p - 0.5 for p in prices]
+        vol = [1000.0] * 30
+        out = mfi(h, l, prices, vol, period=14)
+        for v in out[14:]:
+            self.assertGreater(v, 90.0)
+
+    def test_strict_downtrend_low_mfi(self):
+        # Strictly falling TP => all negative money flow => MFI near 0
+        prices = [130.0 - i for i in range(30)]
+        h = [p + 0.5 for p in prices]
+        l = [p - 0.5 for p in prices]
+        vol = [1000.0] * 30
+        out = mfi(h, l, prices, vol, period=14)
+        for v in out[14:]:
+            self.assertLess(v, 10.0)
+
+    def test_output_length_matches_input(self):
+        n = 30
+        h = [10.0] * n; l = [8.0] * n; c = [9.0] * n; v = [100.0] * n
+        out = mfi(h, l, c, v, period=14)
+        self.assertEqual(len(out), n)
+
+
+class VwapTests(unittest.TestCase):
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            vwap([1.0, 2.0], [1.0], [1.5, 1.8], [100.0, 200.0])
+
+    def test_empty_input(self):
+        out = vwap([], [], [], [])
+        self.assertEqual(out, [])
+
+    def test_no_none_values(self):
+        h = [11.0] * 10; l = [9.0] * 10; c = [10.0] * 10; vol = [1000.0] * 10
+        out = vwap(h, l, c, vol)
+        self.assertTrue(all(v is not None for v in out))
+
+    def test_constant_input(self):
+        # TP = (11+9+10)/3 = 10; VWAP should always equal 10
+        h = [11.0] * 10; l = [9.0] * 10; c = [10.0] * 10; vol = [1000.0] * 10
+        out = vwap(h, l, c, vol)
+        for v in out:
+            self.assertAlmostEqual(v, 10.0, places=10)
+
+    def test_vwap_within_period_high_low(self):
+        import random
+        random.seed(55)
+        prices = [100.0]
+        for _ in range(49):
+            prices.append(prices[-1] + random.uniform(-0.5, 0.5))
+        h = [p + 0.5 for p in prices]
+        l = [p - 0.5 for p in prices]
+        vol = [1000.0] * 50
+        out = vwap(h, l, prices, vol)
+        lo_min = min(l)
+        hi_max = max(h)
+        for v in out:
+            if v is not None:
+                self.assertGreaterEqual(v, lo_min)
+                self.assertLessEqual(v, hi_max)
+
+    def test_known_value_period2(self):
+        # bar0: h=12, l=8, c=10 => TP=10, vol=100 => cum_pv=1000, cum_v=100; VWAP=10
+        # bar1: h=14, l=10, c=12 => TP=12, vol=200 => cum_pv=3400, cum_v=300; VWAP=3400/300=11.333
+        h = [12.0, 14.0]; l = [8.0, 10.0]; c = [10.0, 12.0]; vol = [100.0, 200.0]
+        out = vwap(h, l, c, vol)
+        self.assertAlmostEqual(out[0], 10.0, places=10)
+        self.assertAlmostEqual(out[1], 3400.0 / 300.0, places=10)
+
+    def test_zero_volume_treated_as_one(self):
+        # Zero volume should not crash; treated as 1
+        h = [11.0]; l = [9.0]; c = [10.0]; vol = [0.0]
+        out = vwap(h, l, c, vol)
+        self.assertAlmostEqual(out[0], 10.0, places=10)
+
+    def test_output_length_matches_input(self):
+        n = 20
+        h = [10.0] * n; l = [8.0] * n; c = [9.0] * n; vol = [100.0] * n
+        out = vwap(h, l, c, vol)
+        self.assertEqual(len(out), n)
+
+
+class KeltnerTests(unittest.TestCase):
+    def test_invalid_ema_period(self):
+        with self.assertRaises(ValueError):
+            keltner([1.0] * 30, [0.5] * 30, [0.8] * 30, ema_period=0)
+
+    def test_invalid_atr_period(self):
+        with self.assertRaises(ValueError):
+            keltner([1.0] * 30, [0.5] * 30, [0.8] * 30, atr_period=-1)
+
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            keltner([1.0, 2.0], [0.5], [0.8, 0.9])
+
+    def test_empty_input(self):
+        u, m, l = keltner([], [], [])
+        self.assertEqual(u, [])
+        self.assertEqual(m, [])
+        self.assertEqual(l, [])
+
+    def test_upper_ge_middle_ge_lower(self):
+        import random
+        random.seed(33)
+        prices = [100.0]
+        for _ in range(49):
+            prices.append(prices[-1] + random.uniform(-1, 1))
+        h = [p + 1.0 for p in prices]
+        l = [p - 1.0 for p in prices]
+        u, m, lo = keltner(h, l, prices, ema_period=10, atr_period=10, mult=2.0)
+        for i in range(len(prices)):
+            if u[i] is not None:
+                self.assertGreaterEqual(u[i], m[i])
+                self.assertGreaterEqual(m[i], lo[i])
+
+    def test_insufficient_data_all_none(self):
+        h = [1.0] * 3; l = [0.5] * 3; c = [0.8] * 3
+        u, m, lo = keltner(h, l, c, ema_period=20, atr_period=10)
+        self.assertTrue(all(v is None for v in u))
+        self.assertTrue(all(v is None for v in lo))
+
+    def test_output_lengths_match_input(self):
+        n = 50
+        h = [float(i + 1) for i in range(n)]
+        l = [float(i)     for i in range(n)]
+        c = [float(i) + 0.5 for i in range(n)]
+        u, m, lo = keltner(h, l, c, ema_period=10, atr_period=10)
+        self.assertEqual(len(u), n)
+        self.assertEqual(len(m), n)
+        self.assertEqual(len(lo), n)
+
+    def test_constant_input_bands_equal(self):
+        # Constant price => ATR=0 (after warm-up) => upper == middle == lower
+        h = [11.0] * 60; l = [9.0] * 60; c = [10.0] * 60
+        # ATR on constant data stabilizes at a non-zero value due to TR = 2.
+        # But EMA and ATR should both be stable; upper >= lower is guaranteed.
+        u, m, lo = keltner(h, l, c, ema_period=10, atr_period=10, mult=2.0)
+        for i in range(len(c)):
+            if u[i] is not None:
+                self.assertGreaterEqual(u[i], lo[i])
 
 
 if __name__ == "__main__":

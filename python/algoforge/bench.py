@@ -9,7 +9,11 @@ from __future__ import annotations
 import sys
 import time
 
-from .indicators import sma, ema, rsi, atr, macd, bollinger, stochastic, obv, adx
+from .indicators import (
+    sma, ema, rsi, atr,
+    macd, bollinger, stochastic, obv, adx,
+    wma, cci, williams_r, roc, mfi, vwap, keltner,
+)
 from .patterns   import scan_patterns
 from .types      import Bar
 
@@ -62,6 +66,13 @@ def main(argv: list[str]) -> int:
         ("stoch",     lambda: stochastic(hi, lo, src, 14, 3)),
         ("obv",       lambda: obv(src, vol)),
         ("adx",       lambda: adx(hi, lo, src, 14)),
+        ("wma",       lambda: wma(src, 20)),
+        ("cci",       lambda: cci(hi, lo, src, 20, 0.015)),
+        ("williamsR", lambda: williams_r(hi, lo, src, 14)),
+        ("roc",       lambda: roc(src, 10)),
+        ("mfi",       lambda: mfi(hi, lo, src, vol, 14)),
+        ("vwap",      lambda: vwap(hi, lo, src, vol)),
+        ("keltner",   lambda: keltner(hi, lo, src, 20, 10, 2.0)),
         ("pscan",     lambda: scan_patterns(bars)),
     ):
         total, per = _time(fn, iters)

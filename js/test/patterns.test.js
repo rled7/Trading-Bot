@@ -5,6 +5,7 @@ import { Bar } from "../src/types.js";
 import {
     isDoji, isHammer, isEngulfing, isMarubozu, isPinBar,
     isMorningStar, isEveningStar, isThreeWhiteSoldiers, isThreeBlackCrows,
+    isDoubleTop, isDoubleBottom, isAscendingTriangle, isDescendingTriangle,
     scanPatterns,
 } from "../src/patterns.js";
 
@@ -292,4 +293,265 @@ test("scan: three-bar patterns not emitted before index 2", () => {
         ["morning_star", "evening_star", "three_white_soldiers", "three_black_crows"].includes(m.name)
     );
     assert.equal(threeBar.length, 0);
+});
+
+// ── Double Top ────────────────────────────────────────────────────────────────
+
+// Helper to construct a double-top scenario:
+// First half: rises to peak1, second half rises to peak2 (similar highs),
+// with a valley in between and final close below midpoint of (peak, valley).
+function makeDoubleTopBars() {
+    // 30 bars total. First 15 rise to ~120 then fall; last 15 rise to ~120 then fall.
+    // Overall low ~90, overall high ~120, final close ~100 (below (120+90)/2=105).
+    const bars = [];
+    // First half [0..14]: price goes 100→120→100
+    for (let i = 0; i < 15; i++) {
+        const p = i < 8 ? 100 + i * (20 / 7) : 120 - (i - 7) * (20 / 7);
+        bars.push(b(p - 0.5, p + 1, p - 1, p));
+    }
+    // Second half [15..29]: price goes 100→120→98 (close < (120+90)/2=105)
+    for (let i = 0; i < 15; i++) {
+        const p = i < 8 ? 100 + i * (20 / 7) : 120 - (i - 7) * (24 / 7);
+        const clamp = Math.max(p, 88);
+        bars.push(b(clamp - 0.5, clamp + 1, clamp - 1, clamp));
+    }
+    return bars;
+}
+
+test("doubleTop: positive match returns -1", () => {
+    // Construct bars carefully matching cpp/ logic:
+    // n=30, mid=15
+    // hi1 = max highs[0..14], hi2 = max highs[15..29] — must be within tol=(hi1+hi2)*0.005
+    // lo = min lows[0..29] — must be < hi1*0.99
+    // bars[29].close must be < (hi1+lo)/2
+    const bars = [];
+    // First half: peak at index 7 → high=120.5
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(119, 120.5, 89, 100));
+        else bars.push(b(99, 101, 89, 100));
+    }
+    // Second half: peak at index 22 (index 7 in second half) → high=120.5 (same as hi1)
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(119, 120.5, 89, 100));
+        else if (i === 14) bars.push(b(99, 101, 89, 98)); // close=98 < (120.5+89)/2=104.75
+        else bars.push(b(99, 101, 89, 100));
+    }
+    assert.equal(isDoubleTop(bars), -1);
+});
+
+test("doubleTop: below minimum bars returns 0", () => {
+    const bars = Array.from({ length: 29 }, () => b(100, 110, 90, 100));
+    assert.equal(isDoubleTop(bars), 0);
+});
+
+test("doubleTop: highs too different → no match", () => {
+    // hi1 ≈ 120, hi2 ≈ 150 — far apart, well outside tol
+    const bars = [];
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(119, 120, 89, 100));
+        else bars.push(b(99, 101, 89, 100));
+    }
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(149, 150, 89, 100));  // hi2 = 150, very different
+        else if (i === 14) bars.push(b(99, 101, 89, 98));
+        else bars.push(b(99, 101, 89, 100));
+    }
+    assert.equal(isDoubleTop(bars), 0);
+});
+
+test("doubleTop: close above midpoint → no match", () => {
+    // Same shape as positive match but final close=115 (above (120.5+89)/2=104.75)
+    const bars = [];
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(119, 120.5, 89, 100));
+        else bars.push(b(99, 101, 89, 100));
+    }
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(119, 120.5, 89, 100));
+        else if (i === 14) bars.push(b(114, 116, 89, 115)); // close=115 > midpoint
+        else bars.push(b(99, 101, 89, 100));
+    }
+    assert.equal(isDoubleTop(bars), 0);
+});
+
+// ── Double Bottom ─────────────────────────────────────────────────────────────
+
+test("doubleBottom: positive match returns +1", () => {
+    // n=30, mid=15
+    // lo1 = min lows[0..14], lo2 = min lows[15..29] — must be within tol=(lo1+lo2)*0.005
+    // hi = max highs[0..29] — must be > lo1*1.01
+    // bars[29].close must be > (lo1+hi)/2
+    const bars = [];
+    // First half: trough at index 7 → low=80
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(81, 120, 80, 100));
+        else bars.push(b(99, 120, 89, 100));
+    }
+    // Second half: trough at index 7 of second half → low=80 (same as lo1)
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(81, 120, 80, 100));
+        else if (i === 14) bars.push(b(99, 120, 89, 105)); // close=105 > (80+120)/2=100
+        else bars.push(b(99, 120, 89, 100));
+    }
+    assert.equal(isDoubleBottom(bars), 1);
+});
+
+test("doubleBottom: below minimum bars returns 0", () => {
+    const bars = Array.from({ length: 29 }, () => b(100, 110, 90, 100));
+    assert.equal(isDoubleBottom(bars), 0);
+});
+
+test("doubleBottom: lows too different → no match", () => {
+    const bars = [];
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(81, 120, 80, 100));
+        else bars.push(b(99, 120, 89, 100));
+    }
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(51, 120, 50, 100));  // lo2=50, very different from lo1=80
+        else if (i === 14) bars.push(b(99, 120, 89, 105));
+        else bars.push(b(99, 120, 89, 100));
+    }
+    assert.equal(isDoubleBottom(bars), 0);
+});
+
+test("doubleBottom: close below midpoint → no match", () => {
+    const bars = [];
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(81, 120, 80, 100));
+        else bars.push(b(99, 120, 89, 100));
+    }
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(81, 120, 80, 100));
+        else if (i === 14) bars.push(b(81, 85, 80, 82)); // close=82 < (80+120)/2=100
+        else bars.push(b(99, 120, 89, 100));
+    }
+    assert.equal(isDoubleBottom(bars), 0);
+});
+
+// ── Ascending Triangle ────────────────────────────────────────────────────────
+
+function makeAscendingTriangleBars() {
+    // 20 bars: highs flat around 120 (within 0.5%); lows rising
+    // lo_first (bars 0..9) ≈ 90; lo_last (bars 10..19) ≈ 95 (> 90*1.002=90.18)
+    // hi_var = max_hi(0..9) - max_hi(10..19) must be < resistance*0.005
+    // resistance = max_hi(0..19) ≈ 120
+    const bars = [];
+    for (let i = 0; i < 10; i++) {
+        bars.push(b(100, 120, 90, 105)); // first half: highs=120, lows=90
+    }
+    for (let i = 0; i < 10; i++) {
+        bars.push(b(103, 120, 95, 108)); // second half: highs=120 (flat), lows=95 (rising)
+    }
+    return bars;
+}
+
+test("ascendingTriangle: positive match returns +1", () => {
+    const bars = makeAscendingTriangleBars();
+    assert.equal(isAscendingTriangle(bars), 1);
+});
+
+test("ascendingTriangle: below minimum bars returns 0", () => {
+    const bars = Array.from({ length: 19 }, () => b(100, 120, 90, 105));
+    assert.equal(isAscendingTriangle(bars), 0);
+});
+
+test("ascendingTriangle: lows not rising → no match", () => {
+    // Second half lows same as first half lows (not > lo_first*1.002)
+    const bars = [];
+    for (let i = 0; i < 10; i++) bars.push(b(100, 120, 95, 105));
+    for (let i = 0; i < 10; i++) bars.push(b(103, 120, 95, 108)); // lows flat
+    // lo_last=95, lo_first=95 → lo_last > 95*1.002=95.19 fails
+    assert.equal(isAscendingTriangle(bars), 0);
+});
+
+test("ascendingTriangle: highs not flat → no match", () => {
+    // hi_var = max_hi(first10) - max_hi(last10) must be < resistance*0.005
+    // if first half has high=120, second has high=115, hi_var=5, resistance=120, 5 < 0.6 fails
+    const bars = [];
+    for (let i = 0; i < 10; i++) bars.push(b(100, 120, 90, 105));
+    for (let i = 0; i < 10; i++) bars.push(b(103, 115, 95, 108)); // second half highs much lower
+    assert.equal(isAscendingTriangle(bars), 0);
+});
+
+// ── Descending Triangle ───────────────────────────────────────────────────────
+
+test("descending triangle: positive match returns -1", () => {
+    // 20 bars: lows flat around 80 (within 0.5% of support); highs falling
+    // hi_first (bars 0..9) ≈ 120; hi_last (bars 10..19) ≈ 115 (< 120*0.998=119.76)
+    // lo_var = min_lo(0..9) - min_lo(10..19) must be < support*0.005
+    // support = min_lo(0..19) ≈ 80
+    const bars = [];
+    for (let i = 0; i < 10; i++) bars.push(b(110, 120, 80, 105)); // first: highs=120, lows=80
+    for (let i = 0; i < 10; i++) bars.push(b(100, 115, 80, 95));  // second: highs=115, lows=80
+    assert.equal(isDescendingTriangle(bars), -1);
+});
+
+test("descending triangle: below minimum bars returns 0", () => {
+    const bars = Array.from({ length: 19 }, () => b(100, 120, 80, 100));
+    assert.equal(isDescendingTriangle(bars), 0);
+});
+
+test("descending triangle: highs not falling → no match", () => {
+    // hi_last >= hi_first*0.998 → no match
+    const bars = [];
+    for (let i = 0; i < 10; i++) bars.push(b(110, 120, 80, 105));
+    for (let i = 0; i < 10; i++) bars.push(b(110, 120, 80, 95));  // second half highs same (not falling)
+    assert.equal(isDescendingTriangle(bars), 0);
+});
+
+test("descending triangle: lows not flat → no match", () => {
+    // lo_var = min_lo(0..9) - min_lo(10..19) must be < support*0.005
+    // if first half low=80, second half low=70, lo_var=10, support=70, 10 < 0.35 fails
+    const bars = [];
+    for (let i = 0; i < 10; i++) bars.push(b(110, 120, 80, 105));
+    for (let i = 0; i < 10; i++) bars.push(b(100, 115, 70, 95));  // second half lows much lower
+    assert.equal(isDescendingTriangle(bars), 0);
+});
+
+// ── Scan with chart patterns ──────────────────────────────────────────────────
+
+test("scan: detects double_bottom in sequence", () => {
+    // Build 30 bars that satisfy the double_bottom condition
+    const bars = [];
+    // First half: trough at index 7, low=80; highs=120
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(81, 120, 80, 100));
+        else bars.push(b(99, 120, 89, 100));
+    }
+    // Second half: trough at index 7, low=80; final close=105
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(81, 120, 80, 100));
+        else if (i === 14) bars.push(b(99, 120, 89, 105));
+        else bars.push(b(99, 120, 89, 100));
+    }
+    const matches = scanPatterns(bars);
+    const names = new Set(matches.map(m => m.name));
+    assert.ok(names.has("double_bottom"));
+});
+
+test("scan: chart patterns barIndex is bars.length - 1", () => {
+    const bars = [];
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(81, 120, 80, 100));
+        else bars.push(b(99, 120, 89, 100));
+    }
+    for (let i = 0; i < 15; i++) {
+        if (i === 7) bars.push(b(81, 120, 80, 100));
+        else if (i === 14) bars.push(b(99, 120, 89, 105));
+        else bars.push(b(99, 120, 89, 100));
+    }
+    const matches = scanPatterns(bars);
+    const chartMatches = matches.filter(m => m.name === "double_bottom");
+    for (const m of chartMatches) {
+        assert.equal(m.barIndex, bars.length - 1);
+    }
+});
+
+test("scan: chart patterns not emitted with fewer than 20 bars", () => {
+    const bars = Array.from({ length: 19 }, () => b(100, 110, 90, 100));
+    const matches = scanPatterns(bars);
+    const chartPatterns = ["double_top", "double_bottom", "ascending_triangle", "descending_triangle"];
+    const found = matches.filter(m => chartPatterns.includes(m.name));
+    assert.equal(found.length, 0);
 });

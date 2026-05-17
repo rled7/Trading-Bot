@@ -165,6 +165,81 @@ int af_is_three_black_crows(double b0_o, double b0_h, double b0_l, double b0_c,
     return -1;
 }
 
+/* ── Chart pattern helpers ─────────────────────────────────────────────── */
+static double max_range(const af_bar_t *b, size_t from, size_t to) {
+    double mx = b[from].high;
+    for (size_t i = from + 1; i <= to; ++i)
+        if (b[i].high > mx) mx = b[i].high;
+    return mx;
+}
+
+static double min_range(const af_bar_t *b, size_t from, size_t to) {
+    double mn = b[from].low;
+    for (size_t i = from + 1; i <= to; ++i)
+        if (b[i].low < mn) mn = b[i].low;
+    return mn;
+}
+
+/* ── Double Bottom ─────────────────────────────────────────────────────── */
+/* Matches cpp/ chart_patterns.cpp DoubleBottom logic exactly. */
+int af_is_double_bottom(const af_bar_t *bars, size_t n) {
+    if (n < 30) return 0;
+    size_t mid = n / 2;
+    double lo1 = min_range(bars, 0,   mid - 1);
+    double hi  = max_range(bars, 0,   n - 1);
+    double lo2 = min_range(bars, mid, n - 1);
+    double tol = (lo1 + lo2) * 0.005;
+    double diff = lo1 - lo2;
+    if (diff < 0.0) diff = -diff;
+    if (diff <= tol && hi > lo1 * 1.01 && bars[n - 1].close > (lo1 + hi) / 2.0)
+        return 1;
+    return 0;
+}
+
+/* ── Double Top ────────────────────────────────────────────────────────── */
+/* Matches cpp/ chart_patterns.cpp DoubleTop logic exactly. */
+int af_is_double_top(const af_bar_t *bars, size_t n) {
+    if (n < 30) return 0;
+    size_t mid = n / 2;
+    double hi1 = max_range(bars, 0,   mid - 1);
+    double lo  = min_range(bars, 0,   n - 1);
+    double hi2 = max_range(bars, mid, n - 1);
+    double tol = (hi1 + hi2) * 0.005;
+    double diff = hi1 - hi2;
+    if (diff < 0.0) diff = -diff;
+    if (diff <= tol && lo < hi1 * 0.99 && bars[n - 1].close < (hi1 + lo) / 2.0)
+        return -1;
+    return 0;
+}
+
+/* ── Ascending Triangle ────────────────────────────────────────────────── */
+/* Matches cpp/ chart_patterns.cpp AscendingTriangle logic exactly. */
+int af_is_ascending_triangle(const af_bar_t *bars, size_t n) {
+    if (n < 20) return 0;
+    double resistance = max_range(bars, n - 20, n - 1);
+    double lo_first   = min_range(bars, n - 20, n - 11);
+    double lo_last    = min_range(bars, n - 10, n - 1);
+    double hi_var_raw = max_range(bars, n - 20, n - 11) - max_range(bars, n - 10, n - 1);
+    double hi_var = hi_var_raw < 0.0 ? -hi_var_raw : hi_var_raw;
+    if (lo_last > lo_first * 1.002 && hi_var < resistance * 0.005)
+        return 1;
+    return 0;
+}
+
+/* ── Descending Triangle ───────────────────────────────────────────────── */
+/* Matches cpp/ chart_patterns.cpp DescendingTriangle logic exactly. */
+int af_is_descending_triangle(const af_bar_t *bars, size_t n) {
+    if (n < 20) return 0;
+    double support   = min_range(bars, n - 20, n - 1);
+    double hi_first  = max_range(bars, n - 20, n - 11);
+    double hi_last   = max_range(bars, n - 10, n - 1);
+    double lo_var_raw = min_range(bars, n - 20, n - 11) - min_range(bars, n - 10, n - 1);
+    double lo_var = lo_var_raw < 0.0 ? -lo_var_raw : lo_var_raw;
+    if (hi_last < hi_first * 0.998 && lo_var < support * 0.005)
+        return -1;
+    return 0;
+}
+
 static int emit(af_pattern_match_t *out, size_t cap, size_t i, int idx,
                 const char *name, int sig)
 {
@@ -204,6 +279,20 @@ size_t af_scan_patterns(const af_bar_t *bars, size_t n,
                 count += emit(out, out_cap, count, (int)i, "three_white_soldiers", s);
             if ((s = af_is_three_black_crows(b0o,b0h,b0l,b0c, b1o,b1h,b1l,b1c, o,h,l,c)))
                 count += emit(out, out_cap, count, (int)i, "three_black_crows", s);
+        }
+        /* Chart patterns — use window ending at bar i (length = i+1). */
+        size_t win = i + 1;
+        if (win >= 20) {
+            if ((s = af_is_ascending_triangle(bars, win)))
+                count += emit(out, out_cap, count, (int)i, "ascending_triangle", s);
+            if ((s = af_is_descending_triangle(bars, win)))
+                count += emit(out, out_cap, count, (int)i, "descending_triangle", s);
+        }
+        if (win >= 30) {
+            if ((s = af_is_double_top(bars, win)))
+                count += emit(out, out_cap, count, (int)i, "double_top", s);
+            if ((s = af_is_double_bottom(bars, win)))
+                count += emit(out, out_cap, count, (int)i, "double_bottom", s);
         }
     }
     return count;

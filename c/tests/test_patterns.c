@@ -315,6 +315,73 @@ static void test_scan_three_bar_three_white_soldiers(void) {
     CHK(saw_tws);
 }
 
+/* ── Chart patterns ─────────────────────────────────────────────────── */
+/* Helper: build a flat bar with given OHL = price ± 0.5, close = price. */
+static void mk_flat(af_bar_t *b, double price) {
+    b->open = b->close = price;
+    b->high = price + 0.5;
+    b->low  = price - 0.5;
+    b->volume = 1; b->spread = 0; b->timestamp = 0;
+}
+
+static void test_double_top_positive(void) {
+    /* 30 bars: first half rises to peak ~110, dips, second half rises to ~110 again,
+       final close drops below midpoint of (110 + low). */
+    af_bar_t bars[30] = {0};
+    for (int i = 0; i < 15; ++i) mk_flat(&bars[i], 100 + i * 0.7);   /* 100 → ~110 */
+    for (int i = 15; i < 25; ++i) mk_flat(&bars[i], 100 + (i - 15) * 1.0); /* 100 → 110 */
+    /* Tail bars: drop close below midpoint */
+    for (int i = 25; i < 30; ++i) mk_flat(&bars[i], 95);
+    CHK(af_is_double_top(bars, 30) == -1);
+}
+
+static void test_double_top_below_min_bars(void) {
+    af_bar_t bars[20] = {0};
+    for (int i = 0; i < 20; ++i) mk_flat(&bars[i], 100);
+    CHK(af_is_double_top(bars, 20) == 0);   /* needs >= 30 */
+}
+
+static void test_double_bottom_positive(void) {
+    /* Mirror of double top: dips to ~90, peaks ~100, dips to ~90 again, close > midpoint. */
+    af_bar_t bars[30] = {0};
+    for (int i = 0; i < 15; ++i) mk_flat(&bars[i], 100 - i * 0.7);   /* 100 → ~90 */
+    for (int i = 15; i < 25; ++i) mk_flat(&bars[i], 100 - (i - 15) * 1.0); /* 100 → 90 */
+    for (int i = 25; i < 30; ++i) mk_flat(&bars[i], 105);
+    CHK(af_is_double_bottom(bars, 30) == 1);
+}
+
+static void test_ascending_triangle_positive(void) {
+    /* Last 20 bars: flat resistance ~110, rising lows (95 → 100). */
+    af_bar_t bars[20] = {0};
+    for (int i = 0; i < 10; ++i) {
+        bars[i].open = 100; bars[i].close = 105;
+        bars[i].high = 110; bars[i].low = 95;
+        bars[i].volume = 1;
+    }
+    for (int i = 10; i < 20; ++i) {
+        bars[i].open = 102; bars[i].close = 107;
+        bars[i].high = 110; bars[i].low = 100;   /* lows rose 95 → 100 */
+        bars[i].volume = 1;
+    }
+    CHK(af_is_ascending_triangle(bars, 20) == 1);
+}
+
+static void test_descending_triangle_positive(void) {
+    /* Last 20 bars: flat support ~90, falling highs (110 → 105). */
+    af_bar_t bars[20] = {0};
+    for (int i = 0; i < 10; ++i) {
+        bars[i].open = 100; bars[i].close = 95;
+        bars[i].high = 110; bars[i].low = 90;
+        bars[i].volume = 1;
+    }
+    for (int i = 10; i < 20; ++i) {
+        bars[i].open = 100; bars[i].close = 95;
+        bars[i].high = 105; bars[i].low = 90;    /* highs fell 110 → 105 */
+        bars[i].volume = 1;
+    }
+    CHK(af_is_descending_triangle(bars, 20) == -1);
+}
+
 /* ── Runner ───────────────────────────────────────────────────────── */
 void test_patterns_run(int *total_passed, int *total_failed) {
     test_doji_match();
@@ -370,6 +437,12 @@ void test_patterns_run(int *total_passed, int *total_failed) {
 
     test_scan_three_bar_morning_star();
     test_scan_three_bar_three_white_soldiers();
+
+    test_double_top_positive();
+    test_double_top_below_min_bars();
+    test_double_bottom_positive();
+    test_ascending_triangle_positive();
+    test_descending_triangle_positive();
 
     *total_passed += g_passed;
     *total_failed += g_failed;

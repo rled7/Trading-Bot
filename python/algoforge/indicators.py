@@ -1,4 +1,5 @@
-"""SMA / EMA / RSI / ATR / MACD / Bollinger / Stochastic / OBV / ADX — same math as the cpp/ reference.
+"""SMA / EMA / RSI / ATR / MACD / Bollinger / Stochastic / OBV / ADX /
+WMA / CCI / Williams %R / ROC / MFI / VWAP / Keltner — same math as the cpp/ reference.
 
 API:
     sma(values, period) -> list[float | None]
@@ -10,6 +11,13 @@ API:
     stochastic(highs, lows, closes, k_period, d_period) -> tuple[list[float | None], list[float | None]]
     obv(closes, volumes) -> list[float]
     adx(highs, lows, closes, period) -> tuple[list[float | None], list[float | None], list[float | None]]
+    wma(values, period) -> list[float | None]
+    cci(highs, lows, closes, period, constant) -> list[float | None]
+    williams_r(highs, lows, closes, period) -> list[float | None]
+    roc(values, period) -> list[float | None]
+    mfi(highs, lows, closes, volumes, period) -> list[float | None]
+    vwap(highs, lows, closes, volumes) -> list[float | None]
+    keltner(highs, lows, closes, ema_period, atr_period, mult) -> tuple[list[float | None], list[float | None], list[float | None]]
 
 Indices where the indicator is not yet defined come back as None.
 Raises ValueError for invalid args (period <= 0, mismatched lengths, etc.).
@@ -254,6 +262,202 @@ def obv(closes: Sequence[float], volumes: Sequence[float]) -> list[float]:
         d = closes[i] - closes[i - 1]
         out[i] = out[i - 1] + (volumes[i] if d > 0 else -volumes[i] if d < 0 else 0.0)
     return out
+
+
+def wma(values: Sequence[float], period: int) -> list[float | None]:
+    """Weighted moving average.
+
+    Most recent bar gets weight = period; oldest in window gets weight = 1.
+    Sum of weights = period*(period+1)/2.
+    Matches cpp/ af_wma: defined from index period-1 onwards.
+    Raises ValueError for invalid period.
+    """
+    _check_period(period)
+    n = len(values)
+    out: list[float | None] = [None] * n
+    wsum = period * (period + 1) / 2.0
+    for i in range(period - 1, n):
+        s = 0.0
+        for j in range(period):
+            # weight of oldest element (j=0) is 1, most recent (j=period-1) is period
+            s += values[i - (period - 1 - j)] * (j + 1)
+        out[i] = s / wsum
+    return out
+
+
+def cci(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
+        period: int = 20, constant: float = 0.015) -> list[float | None]:
+    """Commodity Channel Index.
+
+    TP = (H + L + C) / 3
+    CCI = (TP - SMA(TP)) / (constant * mean_abs_dev(TP))
+    When mean_abs_dev == 0, returns 0 (matching cpp/).
+    Defined from index period-1 onwards.
+    Raises ValueError for invalid period or mismatched input lengths.
+    """
+    _check_period(period)
+    n = len(highs)
+    if not (len(lows) == n and len(closes) == n):
+        raise ValueError("highs, lows, closes must all have the same length")
+    out: list[float | None] = [None] * n
+    EPSILON = 1e-10
+    for i in range(period - 1, n):
+        total = 0.0
+        for j in range(period):
+            total += (highs[i - j] + lows[i - j] + closes[i - j]) / 3.0
+        mean = total / period
+        mad = 0.0
+        for j in range(period):
+            mad += abs((highs[i - j] + lows[i - j] + closes[i - j]) / 3.0 - mean)
+        mad /= period
+        tp = (highs[i] + lows[i] + closes[i]) / 3.0
+        out[i] = (tp - mean) / (constant * mad) if mad > EPSILON else 0.0
+    return out
+
+
+def williams_r(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
+               period: int = 14) -> list[float | None]:
+    """Williams %R.
+
+    %R = -100 * (highest_high - close) / (highest_high - lowest_low)
+    When range == 0, returns -50 (matching cpp/).
+    Defined from index period-1 onwards; values are in [-100, 0].
+    Raises ValueError for invalid period or mismatched input lengths.
+    """
+    _check_period(period)
+    n = len(highs)
+    if not (len(lows) == n and len(closes) == n):
+        raise ValueError("highs, lows, closes must all have the same length")
+    out: list[float | None] = [None] * n
+    EPSILON = 1e-10
+    for i in range(period - 1, n):
+        hi = highs[i]
+        lo = lows[i]
+        for j in range(1, period):
+            if highs[i - j] > hi:
+                hi = highs[i - j]
+            if lows[i - j] < lo:
+                lo = lows[i - j]
+        r = hi - lo
+        out[i] = -100.0 * (hi - closes[i]) / r if r > EPSILON else -50.0
+    return out
+
+
+def roc(values: Sequence[float], period: int) -> list[float | None]:
+    """Rate of Change.
+
+    ROC = 100 * (close[i] - close[i-period]) / close[i-period]
+    When close[i-period] == 0, returns 0 (matching cpp/).
+    Defined from index period onwards (n > period required).
+    Raises ValueError for invalid period.
+    """
+    _check_period(period)
+    n = len(values)
+    out: list[float | None] = [None] * n
+    EPSILON = 1e-10
+    if n <= period:
+        return out
+    for i in range(period, n):
+        p = values[i - period]
+        out[i] = (values[i] - p) / p * 100.0 if abs(p) > EPSILON else 0.0
+    return out
+
+
+def mfi(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
+        volumes: Sequence[float], period: int = 14) -> list[float | None]:
+    """Money Flow Index.
+
+    Typical price TP = (H + L + C) / 3
+    Money flow MF = TP * volume
+    Positive MF when TP >= previous TP; negative otherwise.
+    MFI = 100 - 100 / (1 + positive_MF / negative_MF)
+    When negative_MF == 0, returns 100 (matching cpp/).
+    Defined from index period onwards (n > period required).
+    Raises ValueError for invalid period or mismatched input lengths.
+    """
+    _check_period(period)
+    n = len(highs)
+    if not (len(lows) == n and len(closes) == n and len(volumes) == n):
+        raise ValueError("highs, lows, closes, volumes must all have the same length")
+    out: list[float | None] = [None] * n
+    EPSILON = 1e-10
+    if n <= period:
+        return out
+    for i in range(period, n):
+        pmf = 0.0
+        nmf = 0.0
+        for j in range(period):
+            k = i - j
+            tp = (highs[k] + lows[k] + closes[k]) / 3.0
+            mf_val = tp * volumes[k]
+            # Previous TP: if k == 0, use current TP (matching cpp/ k>0 check)
+            if k > 0:
+                pp = (highs[k - 1] + lows[k - 1] + closes[k - 1]) / 3.0
+            else:
+                pp = tp
+            if tp >= pp:
+                pmf += mf_val
+            else:
+                nmf += mf_val
+        r = pmf / nmf if nmf > EPSILON else 100.0
+        out[i] = 100.0 - 100.0 / (1.0 + r)
+    return out
+
+
+def vwap(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
+         volumes: Sequence[float]) -> list[float | None]:
+    """Volume Weighted Average Price — cumulative (no period reset).
+
+    VWAP[i] = cumulative(TP * vol) / cumulative(vol)
+    Zero/negative volume is treated as 1 (matching cpp/).
+    Always defined (no None values returned).
+    Raises ValueError for mismatched input lengths.
+    """
+    n = len(highs)
+    if not (len(lows) == n and len(closes) == n and len(volumes) == n):
+        raise ValueError("highs, lows, closes, volumes must all have the same length")
+    out: list[float | None] = [None] * n
+    cpv = 0.0
+    cv = 0.0
+    for i in range(n):
+        vv = volumes[i] if volumes[i] > 0 else 1.0
+        tp = (highs[i] + lows[i] + closes[i]) / 3.0
+        cpv += tp * vv
+        cv += vv
+        out[i] = cpv / cv
+    return out
+
+
+def keltner(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
+            ema_period: int = 20, atr_period: int = 10, mult: float = 2.0,
+            ) -> tuple[list[float | None], list[float | None], list[float | None]]:
+    """Keltner Channels.
+
+    middle = EMA(close, ema_period)
+    upper  = middle + mult * ATR(highs, lows, closes, atr_period)
+    lower  = middle - mult * ATR(highs, lows, closes, atr_period)
+    Returns (upper, middle, lower).
+    upper/lower are None where either EMA or ATR is None.
+    Matches cpp/ af_keltner.
+    Raises ValueError for invalid periods or mismatched input lengths.
+    """
+    _check_period(ema_period)
+    _check_period(atr_period)
+    n = len(highs)
+    if not (len(lows) == n and len(closes) == n):
+        raise ValueError("highs, lows, closes must all have the same length")
+    middle = ema(closes, ema_period)
+    atr_vals = atr(highs, lows, closes, atr_period)
+    upper: list[float | None] = [None] * n
+    lower: list[float | None] = [None] * n
+    for i in range(n):
+        if middle[i] is None or atr_vals[i] is None:
+            upper[i] = None
+            lower[i] = None
+        else:
+            upper[i] = middle[i] + mult * atr_vals[i]  # type: ignore[operator]
+            lower[i] = middle[i] - mult * atr_vals[i]  # type: ignore[operator]
+    return upper, middle, lower
 
 
 def adx(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],

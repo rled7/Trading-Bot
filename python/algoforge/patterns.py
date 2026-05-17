@@ -157,6 +157,126 @@ def is_three_black_crows(b0: Bar, b1: Bar, b2: Bar) -> int:
     return -1 if (_ok(b0) and _ok(b1) and _ok(b2) and lower) else 0
 
 
+def _max_range(bars: Sequence[Bar], from_idx: int, to_idx: int) -> float:
+    """Return highest high in bars[from_idx..to_idx] inclusive."""
+    mx = bars[from_idx].high
+    for i in range(from_idx + 1, to_idx + 1):
+        if bars[i].high > mx:
+            mx = bars[i].high
+    return mx
+
+
+def _min_range(bars: Sequence[Bar], from_idx: int, to_idx: int) -> float:
+    """Return lowest low in bars[from_idx..to_idx] inclusive."""
+    mn = bars[from_idx].low
+    for i in range(from_idx + 1, to_idx + 1):
+        if bars[i].low < mn:
+            mn = bars[i].low
+    return mn
+
+
+def is_double_top(bars: Sequence[Bar]) -> int:
+    """Return -1 if the latest window contains a Double Top pattern, else 0.
+
+    Requires len(bars) >= 30.
+    Matches cpp/ chart_patterns.cpp DoubleTop rule:
+      - hi1 = max high in first half [0, mid-1]
+      - hi2 = max high in second half [mid, n-1]
+      - lo  = min low over entire window
+      - |hi1 - hi2| <= tol (tol = (hi1+hi2)*0.005)
+      - lo < hi1 * 0.99
+      - last bar close < (hi1 + lo) / 2
+    """
+    n = len(bars)
+    if n < 30:
+        return 0
+    mid = n // 2
+    hi1 = _max_range(bars, 0, mid - 1)
+    lo  = _min_range(bars, 0, n - 1)
+    hi2 = _max_range(bars, mid, n - 1)
+    tol = (hi1 + hi2) * 0.005
+    if (abs(hi1 - hi2) <= tol and lo < hi1 * 0.99
+            and bars[n - 1].close < (hi1 + lo) / 2.0):
+        return -1
+    return 0
+
+
+def is_double_bottom(bars: Sequence[Bar]) -> int:
+    """Return +1 if the latest window contains a Double Bottom pattern, else 0.
+
+    Requires len(bars) >= 30.
+    Matches cpp/ chart_patterns.cpp DoubleBottom rule:
+      - lo1 = min low in first half [0, mid-1]
+      - hi  = max high over entire window
+      - lo2 = min low in second half [mid, n-1]
+      - |lo1 - lo2| <= tol (tol = (lo1+lo2)*0.005)
+      - hi > lo1 * 1.01
+      - last bar close > (lo1 + hi) / 2
+    """
+    n = len(bars)
+    if n < 30:
+        return 0
+    mid = n // 2
+    lo1 = _min_range(bars, 0, mid - 1)
+    hi  = _max_range(bars, 0, n - 1)
+    lo2 = _min_range(bars, mid, n - 1)
+    tol = (lo1 + lo2) * 0.005
+    if (abs(lo1 - lo2) <= tol and hi > lo1 * 1.01
+            and bars[n - 1].close > (lo1 + hi) / 2.0):
+        return 1
+    return 0
+
+
+def is_ascending_triangle(bars: Sequence[Bar]) -> int:
+    """Return +1 if the latest 20-bar window shows an Ascending Triangle, else 0.
+
+    Requires len(bars) >= 20.
+    Looks at the last 20 bars:
+      - resistance = max high over [n-20, n-1]
+      - lo_first   = min low over [n-20, n-11] (first half)
+      - lo_last    = min low over [n-10, n-1]  (second half)
+      - hi_var     = max high of first half - max high of second half
+      - lo_last > lo_first * 1.002  (rising lows)
+      - |hi_var| < resistance * 0.005  (flat resistance)
+    Matches cpp/ chart_patterns.cpp AscendingTriangle rule.
+    """
+    n = len(bars)
+    if n < 20:
+        return 0
+    resistance = _max_range(bars, n - 20, n - 1)
+    lo_first   = _min_range(bars, n - 20, n - 11)
+    lo_last    = _min_range(bars, n - 10, n - 1)
+    hi_var     = _max_range(bars, n - 20, n - 11) - _max_range(bars, n - 10, n - 1)
+    if lo_last > lo_first * 1.002 and abs(hi_var) < resistance * 0.005:
+        return 1
+    return 0
+
+
+def is_descending_triangle(bars: Sequence[Bar]) -> int:
+    """Return -1 if the latest 20-bar window shows a Descending Triangle, else 0.
+
+    Requires len(bars) >= 20.
+    Looks at the last 20 bars:
+      - support   = min low over [n-20, n-1]
+      - hi_first  = max high over [n-20, n-11] (first half)
+      - hi_last   = max high over [n-10, n-1]  (second half)
+      - lo_var    = min low of first half - min low of second half
+      - hi_last < hi_first * 0.998  (falling highs)
+      - |lo_var| < support * 0.005  (flat support)
+    Matches cpp/ chart_patterns.cpp DescendingTriangle rule.
+    """
+    n = len(bars)
+    if n < 20:
+        return 0
+    support  = _min_range(bars, n - 20, n - 1)
+    hi_first = _max_range(bars, n - 20, n - 11)
+    hi_last  = _max_range(bars, n - 10, n - 1)
+    lo_var   = _min_range(bars, n - 20, n - 11) - _min_range(bars, n - 10, n - 1)
+    if hi_last < hi_first * 0.998 and abs(lo_var) < support * 0.005:
+        return -1
+    return 0
+
+
 @dataclass
 class PatternMatch:
     bar_index: int
@@ -166,6 +286,7 @@ class PatternMatch:
 
 def scan_patterns(bars: Sequence[Bar]) -> list[PatternMatch]:
     out: list[PatternMatch] = []
+    n = len(bars)
     for i, b in enumerate(bars):
         if (s := is_doji(b)):     out.append(PatternMatch(i, "doji",     s))
         if (s := is_hammer(b)):   out.append(PatternMatch(i, "hammer",   s))
@@ -184,4 +305,17 @@ def scan_patterns(bars: Sequence[Bar]) -> list[PatternMatch]:
                 out.append(PatternMatch(i, "three_white_soldiers", s))
             if (s := is_three_black_crows(b0, b1, b)):
                 out.append(PatternMatch(i, "three_black_crows", s))
+    # Chart pattern detectors look at the full bar sequence up to each point.
+    # They are only emitted at bar_index = len(bars) - 1 (latest bar).
+    last = n - 1
+    if n >= 20:
+        if (s := is_ascending_triangle(bars)):
+            out.append(PatternMatch(last, "ascending_triangle", s))
+        if (s := is_descending_triangle(bars)):
+            out.append(PatternMatch(last, "descending_triangle", s))
+    if n >= 30:
+        if (s := is_double_top(bars)):
+            out.append(PatternMatch(last, "double_top", s))
+        if (s := is_double_bottom(bars)):
+            out.append(PatternMatch(last, "double_bottom", s))
     return out
