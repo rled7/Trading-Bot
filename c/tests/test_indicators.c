@@ -953,6 +953,546 @@ static void test_trix_uptrend_positive(void) {
     for (int i = 14; i < 50; ++i) CHK(out[i] > 0.0);
 }
 
+/* ── Momentum ──────────────────────────────────────────────────────────── */
+static void test_momentum_invalid_args(void) {
+    double out[4]; double in[] = {1,2,3,4};
+    CHK(af_momentum(NULL, 4, 2, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_momentum(in,   4, 2, NULL) == AF_ERR_INVALID_PARAM);
+    CHK(af_momentum(in,   4, 0, out)  == AF_ERR_INVALID_PARAM);
+}
+
+static void test_momentum_insufficient_data(void) {
+    double out[3]; double in[] = {1,2,3};
+    CHK(af_momentum(in, 3, 3, out) == AF_ERR_IO);
+    CHK(is_nan(out[0]) && is_nan(out[1]) && is_nan(out[2]));
+}
+
+static void test_momentum_known_values(void) {
+    /* period=2: out[2]=src[2]-src[0]=3-1=2, out[3]=4-2=2, out[4]=5-3=2 */
+    double out[5]; double in[] = {1,2,3,4,5};
+    CHK(af_momentum(in, 5, 2, out) == AF_OK);
+    CHK(is_nan(out[0]) && is_nan(out[1]));
+    CHK_NEAR(out[2], 2.0, 1e-12);
+    CHK_NEAR(out[3], 2.0, 1e-12);
+    CHK_NEAR(out[4], 2.0, 1e-12);
+}
+
+static void test_momentum_uptrend_positive(void) {
+    double in[20]; double out[20];
+    for (int i = 0; i < 20; ++i) in[i] = 100.0 + i * 0.5;
+    CHK(af_momentum(in, 20, 5, out) == AF_OK);
+    for (int i = 5; i < 20; ++i) CHK(out[i] > 0.0);
+}
+
+/* ── True Range ────────────────────────────────────────────────────────── */
+static void test_true_range_invalid_args(void) {
+    double out[4]; double h[]={2,3,4,5}, l[]={1,2,3,4}, c[]={1,2,3,4};
+    CHK(af_true_range(NULL, l, c, 4, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_true_range(h, NULL, c, 4, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_true_range(h, l, NULL, 4, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_true_range(h, l, c, 0, out)    == AF_ERR_INVALID_PARAM);
+    CHK(af_true_range(h, l, c, 4, NULL)   == AF_ERR_INVALID_PARAM);
+}
+
+static void test_true_range_known_values(void) {
+    /* bar0: h=12,l=8 → TR=4; bar1: h=11,l=9,c_prev=10 → max(2,1,1)=2 */
+    double h[] = {12, 11};
+    double l[] = {8,   9};
+    double c[] = {10, 10};
+    double out[2];
+    CHK(af_true_range(h, l, c, 2, out) == AF_OK);
+    CHK_NEAR(out[0], 4.0, 1e-12);
+    CHK_NEAR(out[1], 2.0, 1e-12);
+}
+
+static void test_true_range_non_negative(void) {
+    double h[50], l[50], c[50], out[50];
+    for (int i = 0; i < 50; ++i) {
+        h[i] = 100.0 + (i % 7) * 1.0;
+        l[i] = 98.0  - (i % 3) * 0.5;
+        c[i] = 99.0  + (i % 5) * 0.3;
+    }
+    CHK(af_true_range(h, l, c, 50, out) == AF_OK);
+    for (int i = 0; i < 50; ++i) CHK(out[i] >= 0.0);
+}
+
+/* ── Wilder EMA ────────────────────────────────────────────────────────── */
+static void test_wilder_ema_invalid_args(void) {
+    double out[4]; double in[] = {1,2,3,4};
+    CHK(af_wilder_ema(NULL, 4, 2, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_wilder_ema(in,   4, 2, NULL) == AF_ERR_INVALID_PARAM);
+    CHK(af_wilder_ema(in,   4, 0, out)  == AF_ERR_INVALID_PARAM);
+}
+
+static void test_wilder_ema_insufficient_data(void) {
+    double out[2]; double in[] = {1.0, 2.0};
+    CHK(af_wilder_ema(in, 2, 5, out) == AF_ERR_IO);
+    CHK(is_nan(out[0]) && is_nan(out[1]));
+}
+
+static void test_wilder_ema_constant_input(void) {
+    /* Wilder EMA of a constant series should equal that constant */
+    double out[20]; double in[20];
+    for (int i = 0; i < 20; ++i) in[i] = 5.0;
+    CHK(af_wilder_ema(in, 20, 5, out) == AF_OK);
+    /* Seed is at index 4, then EMA propagates */
+    CHK_NEAR(out[19], 5.0, 1e-9);
+}
+
+static void test_wilder_ema_seed_value(void) {
+    /* period=3, in={2,4,6,...}: seed at index 2 = (2+4+6)/3 = 4 */
+    double in[] = {2,4,6,8,10};
+    double out[5];
+    CHK(af_wilder_ema(in, 5, 3, out) == AF_OK);
+    CHK(is_nan(out[0]) && is_nan(out[1]));
+    CHK_NEAR(out[2], 4.0, 1e-12);
+    /* out[3] = 8*(1/3) + 4*(2/3) = 2.667+2.667 = 5.333 */
+    CHK_NEAR(out[3], 8.0/3.0 + 4.0*2.0/3.0, 1e-9);
+}
+
+/* ── VWMA ──────────────────────────────────────────────────────────────── */
+static void test_vwma_invalid_args(void) {
+    double out[4]; double in[] = {1,2,3,4}, v[] = {1,1,1,1};
+    CHK(af_vwma(NULL, v, 4, 2, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_vwma(in, NULL, 4, 2, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_vwma(in, v, 4, 2, NULL)   == AF_ERR_INVALID_PARAM);
+    CHK(af_vwma(in, v, 4, 0, out)    == AF_ERR_INVALID_PARAM);
+}
+
+static void test_vwma_insufficient_data(void) {
+    double out[2]; double in[] = {1,2}, v[] = {1,1};
+    CHK(af_vwma(in, v, 2, 5, out) == AF_ERR_IO);
+    CHK(is_nan(out[0]) && is_nan(out[1]));
+}
+
+static void test_vwma_uniform_volume_equals_sma(void) {
+    /* With uniform volume, VWMA should equal SMA */
+    double in[]  = {2, 4, 6, 8, 10};
+    double v[]   = {1, 1, 1, 1, 1};
+    double out_v[5], out_s[5];
+    CHK(af_vwma(in, v, 5, 3, out_v) == AF_OK);
+    CHK(af_sma(in, 5, 3, out_s) == AF_OK);
+    for (int i = 2; i < 5; ++i)
+        CHK_NEAR(out_v[i], out_s[i], 1e-10);
+}
+
+static void test_vwma_weighted(void) {
+    /* period=2, in={1,3}, vol={1,3}: VWMA = (1*1+3*3)/(1+3) = 10/4 = 2.5 */
+    double in[] = {1, 3};
+    double v[]  = {1, 3};
+    double out[2];
+    CHK(af_vwma(in, v, 2, 2, out) == AF_OK);
+    CHK(is_nan(out[0]));
+    CHK_NEAR(out[1], 2.5, 1e-12);
+}
+
+/* ── Historical Volatility ─────────────────────────────────────────────── */
+static void test_hist_vol_invalid_args(void) {
+    double out[5]; double in[] = {1,2,3,4,5};
+    CHK(af_hist_vol(NULL, 5, 3, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_hist_vol(in,   5, 3, NULL) == AF_ERR_INVALID_PARAM);
+    CHK(af_hist_vol(in,   5, 1, out)  == AF_ERR_INVALID_PARAM); /* period < 2 */
+    CHK(af_hist_vol(in,   5, 0, out)  == AF_ERR_INVALID_PARAM);
+}
+
+static void test_hist_vol_insufficient_data(void) {
+    double out[3]; double in[] = {1,2,3};
+    CHK(af_hist_vol(in, 3, 3, out) == AF_ERR_IO);
+    CHK(is_nan(out[0]) && is_nan(out[1]) && is_nan(out[2]));
+}
+
+static void test_hist_vol_non_negative(void) {
+    double in[50]; double out[50];
+    for (int i = 0; i < 50; ++i) in[i] = 100.0 + i * 0.3 + (i % 7) * 0.1;
+    CHK(af_hist_vol(in, 50, 10, out) == AF_OK);
+    for (int i = 10; i < 50; ++i) CHK(out[i] >= 0.0);
+}
+
+static void test_hist_vol_constant_zero(void) {
+    /* Constant series → log-returns = 0 → vol = 0 */
+    double in[20]; double out[20];
+    for (int i = 0; i < 20; ++i) in[i] = 100.0;
+    CHK(af_hist_vol(in, 20, 5, out) == AF_OK);
+    for (int i = 5; i < 20; ++i) CHK_NEAR(out[i], 0.0, 1e-9);
+}
+
+/* ── CMF ───────────────────────────────────────────────────────────────── */
+static void test_cmf_invalid_args(void) {
+    double out[5];
+    double h[]={1,2,3,4,5}, l[]={0,1,2,3,4}, c[]={1,1,2,3,4}, v[]={1,1,1,1,1};
+    CHK(af_cmf(NULL, l, c, v, 5, 3, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_cmf(h, NULL, c, v, 5, 3, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_cmf(h, l, NULL, v, 5, 3, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_cmf(h, l, c, NULL, 5, 3, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_cmf(h, l, c, v, 5, 0, out)    == AF_ERR_INVALID_PARAM);
+    CHK(af_cmf(h, l, c, v, 5, 3, NULL)   == AF_ERR_INVALID_PARAM);
+}
+
+static void test_cmf_insufficient_data(void) {
+    double out[2];
+    double h[]={1,2}, l[]={0,1}, c[]={1,2}, v[]={1,1};
+    CHK(af_cmf(h, l, c, v, 2, 5, out) == AF_ERR_IO);
+    CHK(is_nan(out[0]) && is_nan(out[1]));
+}
+
+static void test_cmf_bounds(void) {
+    /* CMF must be in [-1, 1] */
+    double h[30], l[30], c[30], v[30], out[30];
+    for (int i = 0; i < 30; ++i) {
+        h[i] = 100.0 + (i % 7);
+        l[i] = 95.0  - (i % 5);
+        c[i] = 97.0  + (i % 3);
+        if (c[i] > h[i]) c[i] = h[i];
+        if (c[i] < l[i]) c[i] = l[i];
+        v[i] = 1000.0 + i * 50;
+    }
+    CHK(af_cmf(h, l, c, v, 30, 5, out) == AF_OK);
+    for (int i = 4; i < 30; ++i) CHK(out[i] >= -1.0 && out[i] <= 1.0);
+}
+
+static void test_cmf_close_at_high(void) {
+    /* close==high → CLV=+1 for each bar → CMF=+1 */
+    double h[] = {10,10,10}, l[] = {5,5,5}, c[] = {10,10,10}, v[] = {100,100,100};
+    double out[3];
+    CHK(af_cmf(h, l, c, v, 3, 3, out) == AF_OK);
+    CHK_NEAR(out[2], 1.0, 1e-12);
+}
+
+/* ── Acc/Dist ──────────────────────────────────────────────────────────── */
+static void test_acc_dist_invalid_args(void) {
+    double out[3];
+    double h[]={1,2,3}, l[]={0,1,2}, c[]={1,2,3}, v[]={1,1,1};
+    CHK(af_acc_dist(NULL, l, c, v, 3, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_acc_dist(h, NULL, c, v, 3, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_acc_dist(h, l, NULL, v, 3, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_acc_dist(h, l, c, NULL, 3, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_acc_dist(h, l, c, v, 0, out)    == AF_ERR_INVALID_PARAM);
+    CHK(af_acc_dist(h, l, c, v, 3, NULL)   == AF_ERR_INVALID_PARAM);
+}
+
+static void test_acc_dist_known_values(void) {
+    /* bar0: h=10,l=8,c=9 → r=2, clv=(1-1)/2=0 → AD=0
+       bar1: h=12,l=10,c=12 → r=2, clv=(2-0)/2=1 → AD=0+1*200=200
+       bar2: h=14,l=12,c=12 → r=2, clv=(0-2)/2=-1 → AD=200+(-1)*300=-100 */
+    double h[] = {10,12,14}, l[] = {8,10,12}, c[] = {9,12,12}, v[] = {100,200,300};
+    double out[3];
+    CHK(af_acc_dist(h, l, c, v, 3, out) == AF_OK);
+    CHK_NEAR(out[0],   0.0, 1e-10);
+    CHK_NEAR(out[1], 200.0, 1e-10);
+    CHK_NEAR(out[2], -100.0, 1e-10);
+}
+
+static void test_acc_dist_cumulative(void) {
+    /* Accumulation/Distribution is cumulative; verify out[n]>out[0] in uptrend */
+    double h[20], l[20], c[20], v[20]; double out[20];
+    for (int i = 0; i < 20; ++i) {
+        h[i] = 100.0 + i;
+        l[i] = 99.0  + i;
+        c[i] = h[i]; /* close at high → CLV=+1 */
+        v[i] = 1000.0;
+    }
+    CHK(af_acc_dist(h, l, c, v, 20, out) == AF_OK);
+    CHK(out[19] > out[0]);
+}
+
+/* ── Force Index ───────────────────────────────────────────────────────── */
+static void test_force_index_invalid_args(void) {
+    double out[4]; double c[] = {1,2,3,4}, v[] = {1,1,1,1};
+    CHK(af_force_index(NULL, v, 4, 2, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_force_index(c, NULL, 4, 2, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_force_index(c, v, 4, 2, NULL)   == AF_ERR_INVALID_PARAM);
+    CHK(af_force_index(c, v, 4, 0, out)    == AF_ERR_INVALID_PARAM);
+    CHK(af_force_index(c, v, 1, 1, out)    == AF_ERR_INVALID_PARAM); /* n<2 */
+}
+
+static void test_force_index_uptrend_positive(void) {
+    /* Strict uptrend with positive volume → force index should be positive */
+    double c[20], v[20], out[20];
+    for (int i = 0; i < 20; ++i) { c[i] = 100.0 + i; v[i] = 1000.0; }
+    CHK(af_force_index(c, v, 20, 3, out) == AF_OK);
+    for (int i = 4; i < 20; ++i) CHK(out[i] > 0.0);
+}
+
+static void test_force_index_nan_prefix(void) {
+    double c[10], v[10], out[10];
+    for (int i = 0; i < 10; ++i) { c[i] = 100.0 + i; v[i] = 1000.0; }
+    CHK(af_force_index(c, v, 10, 5, out) == AF_OK);
+    /* EMA(5) is NaN at indices 0..3 */
+    for (int i = 0; i < 4; ++i) CHK(is_nan(out[i]));
+    CHK(!is_nan(out[4]));
+}
+
+/* ── Volume Oscillator ─────────────────────────────────────────────────── */
+static void test_vol_osc_invalid_args(void) {
+    double out[4]; double v[] = {1,2,3,4};
+    CHK(af_vol_osc(NULL, 4, 2, 3, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_vol_osc(v, 4, 0, 3, out)    == AF_ERR_INVALID_PARAM);
+    CHK(af_vol_osc(v, 4, 2, 0, out)    == AF_ERR_INVALID_PARAM);
+    CHK(af_vol_osc(v, 4, 2, 3, NULL)   == AF_ERR_INVALID_PARAM);
+}
+
+static void test_vol_osc_nan_prefix(void) {
+    double v[20]; double out[20];
+    for (int i = 0; i < 20; ++i) v[i] = 1000.0 + i * 10;
+    CHK(af_vol_osc(v, 20, 3, 6, out) == AF_OK);
+    /* slow EMA(6) first valid at index 5, so out NaN before that */
+    for (int i = 0; i < 5; ++i) CHK(is_nan(out[i]));
+    CHK(!is_nan(out[5]));
+}
+
+static void test_vol_osc_constant(void) {
+    /* Constant volume → EMA_fast == EMA_slow → oscillator = 0 */
+    double v[30]; double out[30];
+    for (int i = 0; i < 30; ++i) v[i] = 1000.0;
+    CHK(af_vol_osc(v, 30, 3, 6, out) == AF_OK);
+    CHK_NEAR(out[29], 0.0, 1e-9);
+}
+
+/* ── Donchian Channels ─────────────────────────────────────────────────── */
+static void test_donchian_invalid_args(void) {
+    double u[5], m[5], l[5];
+    double h[]={1,2,3,4,5}, lo[]={0,1,2,3,4};
+    CHK(af_donchian(NULL, lo, 5, 3, u, m, l) == AF_ERR_INVALID_PARAM);
+    CHK(af_donchian(h, NULL, 5, 3, u, m, l)  == AF_ERR_INVALID_PARAM);
+    CHK(af_donchian(h, lo, 5, 0, u, m, l)    == AF_ERR_INVALID_PARAM);
+    CHK(af_donchian(h, lo, 5, 3, NULL, m, l) == AF_ERR_INVALID_PARAM);
+    CHK(af_donchian(h, lo, 5, 3, u, m, NULL) == AF_ERR_INVALID_PARAM);
+}
+
+static void test_donchian_insufficient_data(void) {
+    double u[2], m[2], l[2];
+    double h[]={1,2}, lo[]={0,1};
+    CHK(af_donchian(h, lo, 2, 5, u, m, l) == AF_ERR_IO);
+    CHK(is_nan(u[0]) && is_nan(u[1]));
+    CHK(is_nan(l[0]) && is_nan(l[1]));
+}
+
+static void test_donchian_ordering(void) {
+    /* upper >= middle >= lower at all valid indices */
+    double h[30], lo[30], u[30], m[30], l[30];
+    for (int i = 0; i < 30; ++i) {
+        h[i]  = 100.0 + (i % 7) * 1.5;
+        lo[i] = 90.0  + (i % 5) * 0.8;
+    }
+    CHK(af_donchian(h, lo, 30, 5, u, m, l) == AF_OK);
+    for (int i = 4; i < 30; ++i) {
+        CHK(u[i] >= m[i]);
+        CHK(m[i] >= l[i]);
+    }
+}
+
+static void test_donchian_known_values(void) {
+    /* period=3, h={3,1,4,1,5}, lo={1,0,2,0,3}
+       index 2: upper=max(3,1,4)=4, lower=min(1,0,2)=0, mid=2
+       index 4: upper=max(4,1,5)=5, lower=min(2,0,3)=0, mid=2.5 */
+    double h[]  = {3,1,4,1,5};
+    double lo[] = {1,0,2,0,3};
+    double u[5], m[5], l[5];
+    CHK(af_donchian(h, lo, 5, 3, u, m, l) == AF_OK);
+    CHK(is_nan(u[0]) && is_nan(u[1]));
+    CHK_NEAR(u[2], 4.0, 1e-12);
+    CHK_NEAR(l[2], 0.0, 1e-12);
+    CHK_NEAR(m[2], 2.0, 1e-12);
+    CHK_NEAR(u[4], 5.0, 1e-12);
+    CHK_NEAR(l[4], 0.0, 1e-12);
+    CHK_NEAR(m[4], 2.5, 1e-12);
+}
+
+/* ── Pivot Classic ─────────────────────────────────────────────────────── */
+static void test_pivot_classic_invalid_args(void) {
+    double p, r1, s1, r2, s2, r3, s3;
+    CHK(af_pivot_classic(1.2, 1.0, 1.1, NULL, &r1, &s1, &r2, &s2, &r3, &s3) == AF_ERR_INVALID_PARAM);
+    CHK(af_pivot_classic(1.2, 1.0, 1.1, &p, NULL, &s1, &r2, &s2, &r3, &s3) == AF_ERR_INVALID_PARAM);
+    CHK(af_pivot_classic(1.2, 1.0, 1.1, &p, &r1, NULL, &r2, &s2, &r3, &s3) == AF_ERR_INVALID_PARAM);
+}
+
+static void test_pivot_classic_known_values(void) {
+    /* h=1.2, l=1.0, c=1.1: p=(1.2+1.0+1.1)/3=1.1
+       R1=2*1.1-1.0=1.2, R2=1.1+0.2=1.3, R3=1.1+0.4=1.5
+       S1=2*1.1-1.2=1.0, S2=1.1-0.2=0.9, S3=1.1-0.4=0.7 */
+    double p, r1, s1, r2, s2, r3, s3;
+    CHK(af_pivot_classic(1.2, 1.0, 1.1, &p, &r1, &s1, &r2, &s2, &r3, &s3) == AF_OK);
+    CHK_NEAR(p,  1.1,  1e-9);
+    CHK_NEAR(r1, 1.2,  1e-9);
+    CHK_NEAR(s1, 1.0,  1e-9);
+    CHK_NEAR(r2, 1.3,  1e-9);
+    CHK_NEAR(s2, 0.9,  1e-9);
+    CHK_NEAR(r3, 1.5,  1e-9);
+    CHK_NEAR(s3, 0.7,  1e-9);
+}
+
+static void test_pivot_classic_ordering(void) {
+    /* R1 > P > S1 for non-degenerate input */
+    double p, r1, s1, r2, s2, r3, s3;
+    CHK(af_pivot_classic(110.0, 90.0, 100.0, &p, &r1, &s1, &r2, &s2, &r3, &s3) == AF_OK);
+    CHK(r1 > p);
+    CHK(p  > s1);
+    CHK(r2 > r1);
+    CHK(s1 > s2);
+}
+
+/* ── Pivot Fibonacci ───────────────────────────────────────────────────── */
+static void test_pivot_fibonacci_invalid_args(void) {
+    double p, r1, s1, r2, s2, r3, s3;
+    CHK(af_pivot_fibonacci(1.2, 1.0, 1.1, NULL, &r1, &s1, &r2, &s2, &r3, &s3) == AF_ERR_INVALID_PARAM);
+    CHK(af_pivot_fibonacci(1.2, 1.0, 1.1, &p, NULL, &s1, &r2, &s2, &r3, &s3) == AF_ERR_INVALID_PARAM);
+}
+
+static void test_pivot_fibonacci_known_values(void) {
+    /* h=1.2, l=1.0, c=1.1: p=1.1, r=0.2
+       R1=1.1+0.2*0.382=1.1764, R2=1.1+0.2*0.618=1.2236, R3=1.1+0.2=1.3
+       S1=1.1-0.2*0.382=1.0236, S2=1.1-0.2*0.618=0.9764, S3=1.1-0.2=0.9 */
+    double p, r1, s1, r2, s2, r3, s3;
+    CHK(af_pivot_fibonacci(1.2, 1.0, 1.1, &p, &r1, &s1, &r2, &s2, &r3, &s3) == AF_OK);
+    CHK_NEAR(p,  1.1,                1e-9);
+    CHK_NEAR(r1, 1.1 + 0.2 * 0.382, 1e-9);
+    CHK_NEAR(r2, 1.1 + 0.2 * 0.618, 1e-9);
+    CHK_NEAR(r3, 1.3,                1e-9);
+    CHK_NEAR(s1, 1.1 - 0.2 * 0.382, 1e-9);
+    CHK_NEAR(s2, 1.1 - 0.2 * 0.618, 1e-9);
+    CHK_NEAR(s3, 0.9,                1e-9);
+    CHK(r1 > p && p > s1);
+}
+
+/* ── Pivot Camarilla ───────────────────────────────────────────────────── */
+static void test_pivot_camarilla_invalid_args(void) {
+    double p, r1, s1, r2, s2, r3, s3;
+    CHK(af_pivot_camarilla(1.2, 1.0, 1.1, NULL, &r1, &s1, &r2, &s2, &r3, &s3) == AF_ERR_INVALID_PARAM);
+    CHK(af_pivot_camarilla(1.2, 1.0, 1.1, &p, NULL, &s1, &r2, &s2, &r3, &s3) == AF_ERR_INVALID_PARAM);
+}
+
+static void test_pivot_camarilla_known_values(void) {
+    /* h=120, l=100, c=110: r=20
+       R1=110+20*1.1/12≈111.833, R2=110+20*1.1/6≈113.667, R3=110+20*1.1/4=115.5
+       S1=110-20*1.1/12≈108.167, S2=110-20*1.1/6≈106.333, S3=110-20*1.1/4=104.5 */
+    double p, r1, s1, r2, s2, r3, s3;
+    CHK(af_pivot_camarilla(120.0, 100.0, 110.0, &p, &r1, &s1, &r2, &s2, &r3, &s3) == AF_OK);
+    CHK_NEAR(p,  (120.0+100.0+110.0)/3.0, 1e-9);
+    CHK_NEAR(r1, 110.0 + 20.0*1.1/12.0, 1e-9);
+    CHK_NEAR(r2, 110.0 + 20.0*1.1/6.0,  1e-9);
+    CHK_NEAR(r3, 110.0 + 20.0*1.1/4.0,  1e-9);
+    CHK_NEAR(s1, 110.0 - 20.0*1.1/12.0, 1e-9);
+    CHK_NEAR(s2, 110.0 - 20.0*1.1/6.0,  1e-9);
+    CHK_NEAR(s3, 110.0 - 20.0*1.1/4.0,  1e-9);
+    CHK(r1 > p && p > s1);
+}
+
+/* ── Fibonacci Retracement ─────────────────────────────────────────────── */
+static void test_fibonacci_invalid_args(void) {
+    CHK(af_fibonacci(1.2, 1.0, NULL) == AF_ERR_INVALID_PARAM);
+}
+
+static void test_fibonacci_levels(void) {
+    /* swing_high=1.2, swing_low=1.0: range=0.2
+       Level[0]=1.2 (0%), Level[3]=1.1 (50%), Level[6]=1.0 (100%) */
+    double fl[7];
+    CHK(af_fibonacci(1.2, 1.0, fl) == AF_OK);
+    CHK_NEAR(fl[0], 1.2,  1e-9); /* 0% = high */
+    CHK_NEAR(fl[3], 1.1,  1e-9); /* 50% = midpoint */
+    CHK_NEAR(fl[6], 1.0,  1e-9); /* 100% = low */
+    /* Levels should decrease monotonically */
+    for (int i = 0; i < 6; ++i) CHK(fl[i] >= fl[i + 1]);
+}
+
+static void test_fibonacci_all_levels(void) {
+    static const double F[] = {0.0, 0.236, 0.382, 0.500, 0.618, 0.786, 1.000};
+    double fl[7];
+    CHK(af_fibonacci(2.0, 1.0, fl) == AF_OK);
+    for (int i = 0; i < 7; ++i)
+        CHK_NEAR(fl[i], 2.0 - F[i] * 1.0, 1e-9);
+}
+
+/* ── SAR ───────────────────────────────────────────────────────────────── */
+static void test_sar_invalid_args(void) {
+    double sar[4], bull[4];
+    double h[]={1,2,3,4}, l[]={0,1,2,3};
+    CHK(af_sar(NULL, l, 4, 0.02, 0.02, 0.2, sar, bull) == AF_ERR_INVALID_PARAM);
+    CHK(af_sar(h, NULL, 4, 0.02, 0.02, 0.2, sar, bull) == AF_ERR_INVALID_PARAM);
+    CHK(af_sar(h, l, 4, 0.02, 0.02, 0.2, NULL, bull)   == AF_ERR_INVALID_PARAM);
+    CHK(af_sar(h, l, 4, 0.02, 0.02, 0.2, sar, NULL)    == AF_ERR_INVALID_PARAM);
+    CHK(af_sar(h, l, 1, 0.02, 0.02, 0.2, sar, bull)    == AF_ERR_INVALID_PARAM); /* n<2 */
+}
+
+static void test_sar_bull_values(void) {
+    /* out_bull must be 0.0 or 1.0 */
+    double h[30], l[30], sar[30], bull[30];
+    for (int i = 0; i < 30; ++i) {
+        h[i] = 100.0 + (i % 7) * 2.0;
+        l[i] = 95.0  - (i % 5) * 1.0;
+    }
+    CHK(af_sar(h, l, 30, 0.02, 0.02, 0.2, sar, bull) == AF_OK);
+    for (int i = 0; i < 30; ++i)
+        CHK(bull[i] == 0.0 || bull[i] == 1.0);
+}
+
+static void test_sar_initial_state(void) {
+    /* Initial SAR = low[0], bull = 1.0 */
+    double h[] = {10,11,12}, l[] = {8,9,10};
+    double sar[3], bull[3];
+    CHK(af_sar(h, l, 3, 0.02, 0.02, 0.2, sar, bull) == AF_OK);
+    CHK_NEAR(sar[0], l[0], 1e-12);
+    CHK_NEAR(bull[0], 1.0, 1e-12);
+}
+
+static void test_sar_alternates_on_reversal(void) {
+    /* Force a reversal: start bull, then break SAR from below */
+    /* large downward move should flip to bearish */
+    double h[] = {100, 99, 98, 97, 50};   /* bar4: huge drop */
+    double l[] = {99,  98, 97, 96, 30};
+    double sar[5], bull[5];
+    CHK(af_sar(h, l, 5, 0.02, 0.02, 0.2, sar, bull) == AF_OK);
+    /* At some point bull should become 0.0 */
+    int found_bear = 0;
+    for (int i = 0; i < 5; ++i) if (bull[i] < 0.5) { found_bear = 1; break; }
+    CHK(found_bear);
+}
+
+/* ── Ichimoku ──────────────────────────────────────────────────────────── */
+static void test_ichimoku_invalid_args(void) {
+    double t[20], k[20], sa[20], sb[20], ch[20];
+    double h[20], l[20], c[20];
+    for (int i = 0; i < 20; ++i) { h[i]=11; l[i]=9; c[i]=10; }
+    CHK(af_ichimoku(NULL, l, c, 20, 9, 26, 52, t, k, sa, sb, ch) == AF_ERR_INVALID_PARAM);
+    CHK(af_ichimoku(h, NULL, c, 20, 9, 26, 52, t, k, sa, sb, ch) == AF_ERR_INVALID_PARAM);
+    CHK(af_ichimoku(h, l, NULL, 20, 9, 26, 52, t, k, sa, sb, ch) == AF_ERR_INVALID_PARAM);
+    CHK(af_ichimoku(h, l, c, 20, 9, 26, 52, NULL, k, sa, sb, ch) == AF_ERR_INVALID_PARAM);
+    CHK(af_ichimoku(h, l, c, 20, 9, 26, 52, t, NULL, sa, sb, ch) == AF_ERR_INVALID_PARAM);
+    CHK(af_ichimoku(h, l, c, 0, 9, 26, 52, t, k, sa, sb, ch)     == AF_ERR_INVALID_PARAM);
+}
+
+static void test_ichimoku_tenkan_nan_prefix(void) {
+    double h[30], l[30], c[30];
+    double t[30], k[30], sa[30], sb[30], ch[30];
+    for (int i = 0; i < 30; ++i) { h[i]=11; l[i]=9; c[i]=10; }
+    CHK(af_ichimoku(h, l, c, 30, 9, 26, 52, t, k, sa, sb, ch) == AF_OK);
+    /* Tenkan NaN for indices 0..7 (tenkan=9 means valid at index 8) */
+    for (int i = 0; i < 8; ++i) CHK(is_nan(t[i]));
+    CHK(!is_nan(t[8]));
+}
+
+static void test_ichimoku_constant_prices(void) {
+    /* Constant prices → tenkan = kijun = close for all valid indices */
+    double h[60], l[60], c[60];
+    double t[60], k[60], sa[60], sb[60], ch[60];
+    for (int i = 0; i < 60; ++i) { h[i]=10; l[i]=10; c[i]=10; }
+    CHK(af_ichimoku(h, l, c, 60, 9, 26, 52, t, k, sa, sb, ch) == AF_OK);
+    /* At index 25, kijun is first valid (kijun-1=25) */
+    CHK(!is_nan(k[25]));
+    CHK_NEAR(k[25], 10.0, 1e-12);
+    CHK(!is_nan(t[8]));
+    CHK_NEAR(t[8], 10.0, 1e-12);
+}
+
+static void test_ichimoku_chikou_shift(void) {
+    /* chikou[i] = close[i + kijun], so chikou[0] = close[kijun] */
+    double h[60], l[60], c[60];
+    double t[60], k[60], sa[60], sb[60], ch[60];
+    for (int i = 0; i < 60; ++i) { h[i]=10+i; l[i]=9+i; c[i]=10.0+(double)i*0.5; }
+    CHK(af_ichimoku(h, l, c, 60, 9, 26, 52, t, k, sa, sb, ch) == AF_OK);
+    /* ch[0] should equal c[26] */
+    CHK_NEAR(ch[0], c[26], 1e-12);
+}
+
 /* ── runner ────────────────────────────────────────────────────────────── */
 void test_indicators_run(int *total_passed, int *total_failed) {
     /* legacy smoke checks from test_smoke.c — keep them. */
@@ -1070,6 +1610,38 @@ void test_indicators_run(int *total_passed, int *total_failed) {
     test_trix_constant_input();
     test_trix_nan_prefix();
     test_trix_uptrend_positive();
+
+    /* Round 4 — 16 new indicators */
+    test_momentum_invalid_args();           test_momentum_insufficient_data();
+    test_momentum_known_values();           test_momentum_uptrend_positive();
+    test_true_range_invalid_args();         test_true_range_known_values();
+    test_true_range_non_negative();
+    test_wilder_ema_invalid_args();         test_wilder_ema_insufficient_data();
+    test_wilder_ema_constant_input();       test_wilder_ema_seed_value();
+    test_vwma_invalid_args();               test_vwma_insufficient_data();
+    test_vwma_uniform_volume_equals_sma();  test_vwma_weighted();
+    test_hist_vol_invalid_args();           test_hist_vol_insufficient_data();
+    test_hist_vol_constant_zero();          test_hist_vol_non_negative();
+    test_cmf_invalid_args();                test_cmf_insufficient_data();
+    test_cmf_bounds();                      test_cmf_close_at_high();
+    test_acc_dist_invalid_args();           test_acc_dist_cumulative();
+    test_acc_dist_known_values();
+    test_force_index_invalid_args();        test_force_index_nan_prefix();
+    test_force_index_uptrend_positive();
+    test_vol_osc_invalid_args();            test_vol_osc_nan_prefix();
+    test_vol_osc_constant();
+    test_donchian_invalid_args();           test_donchian_insufficient_data();
+    test_donchian_ordering();               test_donchian_known_values();
+    test_pivot_classic_invalid_args();      test_pivot_classic_known_values();
+    test_pivot_classic_ordering();
+    test_pivot_fibonacci_invalid_args();    test_pivot_fibonacci_known_values();
+    test_pivot_camarilla_invalid_args();    test_pivot_camarilla_known_values();
+    test_fibonacci_invalid_args();          test_fibonacci_levels();
+    test_fibonacci_all_levels();
+    test_sar_invalid_args();                test_sar_bull_values();
+    test_sar_initial_state();               test_sar_alternates_on_reversal();
+    test_ichimoku_invalid_args();           test_ichimoku_tenkan_nan_prefix();
+    test_ichimoku_constant_prices();        test_ichimoku_chikou_shift();
 
     *total_passed += g_passed;
     *total_failed += g_failed;

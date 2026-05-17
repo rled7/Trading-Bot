@@ -1,5 +1,8 @@
 """SMA / EMA / RSI / ATR / MACD / Bollinger / Stochastic / OBV / ADX /
-WMA / CCI / Williams %R / ROC / MFI / VWAP / Keltner / HMA / DEMA / TEMA / TRIX
+WMA / CCI / Williams %R / ROC / MFI / VWAP / Keltner / HMA / DEMA / TEMA / TRIX /
+Momentum / TrueRange / WilderEMA / VWMA / HistVol / CMF / AccDist / ForceIndex /
+VolOsc / Donchian / PivotClassic / PivotFibonacci / PivotCamarilla / Fibonacci /
+SAR / Ichimoku
 — same math as the cpp/ reference.
 
 API:
@@ -23,6 +26,22 @@ API:
     dema(values, period) -> list[float | None]
     tema(values, period) -> list[float | None]
     trix(values, period) -> list[float | None]
+    momentum(values, period) -> list[float | None]
+    true_range(highs, lows, closes) -> list[float | None]
+    wilder_ema(values, period) -> list[float | None]
+    vwma(values, volumes, period) -> list[float | None]
+    hist_vol(values, period, tdays) -> list[float | None]
+    cmf(highs, lows, closes, volumes, period) -> list[float | None]
+    acc_dist(highs, lows, closes, volumes) -> list[float]
+    force_index(closes, volumes, period) -> list[float | None]
+    vol_osc(volumes, fast, slow) -> list[float | None]
+    donchian(highs, lows, period) -> tuple[list[float | None], list[float | None], list[float | None]]
+    pivot_classic(high, low, close) -> dict[str, float]
+    pivot_fibonacci(high, low, close) -> dict[str, float]
+    pivot_camarilla(high, low, close) -> dict[str, float]
+    fibonacci(swing_high, swing_low) -> list[float]
+    sar(highs, lows, start, step, max_af) -> tuple[list[float | None], list[float | None]]
+    ichimoku(highs, lows, closes, tenkan, kijun, senkou_b) -> tuple[...]
 
 Indices where the indicator is not yet defined come back as None.
 Raises ValueError for invalid args (period <= 0, mismatched lengths, etc.).
@@ -628,3 +647,509 @@ def trix(values: Sequence[float], period: int) -> list[float | None]:
             out[i] = (e3[i] - e3[i - 1]) / e3[i - 1] * 100.0  # type: ignore[operator]
         # else leave as None (|prev| <= EPSILON)
     return out
+
+
+# ══ NEW INDICATORS ════════════════════════════════════════════════════════════
+
+def momentum(values: Sequence[float], period: int) -> list[float | None]:
+    """Momentum.
+
+    out[i] = values[i] - values[i - period]
+    Defined from index period onwards (n > period required).
+    Matches cpp/ af_momentum.
+    Raises ValueError for invalid period.
+    """
+    _check_period(period)
+    n = len(values)
+    out: list[float | None] = [None] * n
+    if n <= period:
+        return out
+    for i in range(period, n):
+        out[i] = values[i] - values[i - period]
+    return out
+
+
+def true_range(highs: Sequence[float], lows: Sequence[float],
+               closes: Sequence[float]) -> list[float | None]:
+    """True Range.
+
+    out[0] = highs[0] - lows[0]
+    out[i] = max(highs[i] - lows[i], |highs[i] - closes[i-1]|, |lows[i] - closes[i-1]|)
+    Always fully defined (no None).
+    Matches cpp/ af_true_range.
+    Raises ValueError for mismatched lengths or empty input.
+    """
+    n = len(highs)
+    if not (len(lows) == n and len(closes) == n):
+        raise ValueError("highs, lows, closes must all have the same length")
+    if n == 0:
+        return []
+    out: list[float | None] = [None] * n
+    out[0] = highs[0] - lows[0]
+    for i in range(1, n):
+        hl = highs[i] - lows[i]
+        hpc = abs(highs[i] - closes[i - 1])
+        lpc = abs(lows[i] - closes[i - 1])
+        out[i] = max(hl, hpc, lpc)
+    return out
+
+
+def wilder_ema(values: Sequence[float | None], period: int) -> list[float | None]:
+    """Wilder's EMA (smoothing factor alpha = 1/period).
+
+    Seeds with SMA of first `period` consecutive non-None values.
+    Matches cpp/ af_wilder_ema.
+    Raises ValueError for invalid period.
+    """
+    _check_period(period)
+    n = len(values)
+    out: list[float | None] = [None] * n
+    # Find first run of `period` consecutive non-None values
+    seed_start = -1
+    run = 0
+    for i in range(n):
+        if values[i] is not None:
+            run += 1
+            if run == period:
+                seed_start = i - period + 1
+                break
+        else:
+            run = 0
+    if seed_start < 0:
+        return out
+    alpha = 1.0 / period
+    seed_end = seed_start + period - 1
+    seed = sum(values[seed_start: seed_end + 1]) / period  # type: ignore[arg-type]
+    out[seed_end] = seed
+    for i in range(seed_end + 1, n):
+        if values[i] is None or out[i - 1] is None:
+            out[i] = None
+        else:
+            out[i] = values[i] * alpha + out[i - 1] * (1.0 - alpha)  # type: ignore[operator]
+    return out
+
+
+def vwma(values: Sequence[float], volumes: Sequence[float],
+         period: int) -> list[float | None]:
+    """Volume Weighted Moving Average.
+
+    VWMA[i] = sum(price[j]*vol[j]) / sum(vol[j])  over period bars ending at i.
+    Zero/negative volume is treated as 1 (matching cpp/ af_vwma).
+    Defined from index period-1 onwards.
+    Raises ValueError for invalid period or mismatched lengths.
+    """
+    _check_period(period)
+    n = len(values)
+    if len(volumes) != n:
+        raise ValueError("values and volumes must have the same length")
+    out: list[float | None] = [None] * n
+    EPSILON = 1e-10
+    for i in range(period - 1, n):
+        pv = 0.0
+        vsum = 0.0
+        for j in range(period):
+            vv = volumes[i - j]
+            if vv <= 0:
+                vv = 1.0
+            pv += values[i - j] * vv
+            vsum += vv
+        out[i] = pv / vsum if vsum > EPSILON else values[i]
+    return out
+
+
+def hist_vol(values: Sequence[float], period: int,
+             tdays: int = 252) -> list[float | None]:
+    """Historical Volatility (annualised).
+
+    Computes log-return std dev over a rolling `period` window, annualised by
+    sqrt(tdays) and scaled to percent.
+    Uses sample std dev (divides by period-1, matching cpp/ af_hist_vol).
+    Defined from index period onwards (n > period required).
+    Raises ValueError for period < 2 or mismatched lengths.
+    """
+    _check_period(period)
+    if period < 2:
+        raise ValueError(f"hist_vol requires period >= 2, got {period!r}")
+    n = len(values)
+    out: list[float | None] = [None] * n
+    EPSILON = 1e-10
+    if n <= period:
+        return out
+    for i in range(period, n):
+        mean = 0.0
+        count = 0
+        for j in range(period):
+            p = values[i - 1 - j]
+            if p > EPSILON:
+                mean += math.log(values[i - j] / p)
+                count += 1
+        mean /= period
+        var = 0.0
+        for j in range(period):
+            p = values[i - 1 - j]
+            if p > EPSILON:
+                r = math.log(values[i - j] / p) - mean
+                var += r * r
+        sd = math.sqrt(var / (period - 1))
+        out[i] = sd * math.sqrt(float(tdays)) * 100.0
+    return out
+
+
+def cmf(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
+        volumes: Sequence[float], period: int = 20) -> list[float | None]:
+    """Chaikin Money Flow.
+
+    CLV = ((close - low) - (high - close)) / (high - low)
+    CMF[i] = sum(CLV[j] * vol[j]) / sum(vol[j])  over period bars ending at i.
+    When range == 0, CLV = 0.  When total volume == 0, CMF = 0.
+    Defined from index period-1 onwards.
+    Matches cpp/ af_cmf.
+    Raises ValueError for invalid period or mismatched lengths.
+    """
+    _check_period(period)
+    n = len(highs)
+    if not (len(lows) == n and len(closes) == n and len(volumes) == n):
+        raise ValueError("highs, lows, closes, volumes must all have the same length")
+    out: list[float | None] = [None] * n
+    EPSILON = 1e-10
+    for i in range(period - 1, n):
+        mfvs = 0.0
+        vs = 0.0
+        for j in range(period):
+            r = highs[i - j] - lows[i - j]
+            clv = ((closes[i - j] - lows[i - j]) - (highs[i - j] - closes[i - j])) / r \
+                  if r > EPSILON else 0.0
+            mfvs += clv * volumes[i - j]
+            vs += volumes[i - j]
+        out[i] = mfvs / vs if vs > EPSILON else 0.0
+    return out
+
+
+def acc_dist(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
+             volumes: Sequence[float]) -> list[float]:
+    """Accumulation / Distribution Line.
+
+    CLV = ((close - low) - (high - close)) / (high - low)
+    acc_dist[0] = CLV[0] * vol[0] (not seeded at 0 as in cpp/ af_acc_dist).
+
+    Note: cpp/ sets out[0] = 0 then adds CLV*vol in the same loop starting at i=0,
+    making acc_dist[0] = CLV[0]*vol[0].  This Python version matches that exactly.
+    Raises ValueError for mismatched lengths.
+    """
+    n = len(highs)
+    if not (len(lows) == n and len(closes) == n and len(volumes) == n):
+        raise ValueError("highs, lows, closes, volumes must all have the same length")
+    out: list[float] = [0.0] * n
+    EPSILON = 1e-10
+    for i in range(n):
+        r = highs[i] - lows[i]
+        clv = ((closes[i] - lows[i]) - (highs[i] - closes[i])) / r if r > EPSILON else 0.0
+        out[i] = (0.0 if i == 0 else out[i - 1]) + clv * volumes[i]
+    return out
+
+
+def force_index(closes: Sequence[float], volumes: Sequence[float],
+                period: int = 13) -> list[float | None]:
+    """Force Index.
+
+    raw[0] = 0; raw[i] = (close[i] - close[i-1]) * volume[i]
+    Force Index = EMA(raw, period).
+    Matches cpp/ af_force_index.
+    Raises ValueError for invalid period, mismatched lengths, or n < 2.
+    """
+    _check_period(period)
+    n = len(closes)
+    if len(volumes) != n:
+        raise ValueError("closes and volumes must have the same length")
+    if n < 2:
+        raise ValueError("force_index requires at least 2 bars")
+    raw: list[float | None] = [0.0] + [
+        (closes[i] - closes[i - 1]) * volumes[i] for i in range(1, n)
+    ]
+    return ema(raw, period)
+
+
+def vol_osc(volumes: Sequence[float], fast: int = 14,
+            slow: int = 28) -> list[float | None]:
+    """Volume Oscillator.
+
+    vol_osc[i] = (EMA(fast)[i] - EMA(slow)[i]) / EMA(slow)[i] * 100
+    None where either EMA is None or |EMA(slow)| <= EPSILON.
+    Matches cpp/ af_vol_osc.
+    Raises ValueError for invalid periods.
+    """
+    _check_period(fast)
+    _check_period(slow)
+    n = len(volumes)
+    ef = ema(volumes, fast)
+    es = ema(volumes, slow)
+    EPSILON = 1e-10
+    out: list[float | None] = [None] * n
+    for i in range(n):
+        if ef[i] is not None and es[i] is not None and abs(es[i]) > EPSILON:  # type: ignore[arg-type]
+            out[i] = (ef[i] - es[i]) / es[i] * 100.0  # type: ignore[operator]
+    return out
+
+
+def donchian(highs: Sequence[float], lows: Sequence[float],
+             period: int = 20,
+             ) -> tuple[list[float | None], list[float | None], list[float | None]]:
+    """Donchian Channels.
+
+    upper  = highest high over period bars
+    lower  = lowest low over period bars
+    middle = (upper + lower) / 2
+    Returns (upper, middle, lower).
+    Defined from index period-1 onwards.
+    Matches cpp/ af_donchian.
+    Raises ValueError for invalid period or mismatched lengths.
+    """
+    _check_period(period)
+    n = len(highs)
+    if len(lows) != n:
+        raise ValueError("highs and lows must have the same length")
+    upper: list[float | None] = [None] * n
+    middle: list[float | None] = [None] * n
+    lower: list[float | None] = [None] * n
+    for i in range(period - 1, n):
+        hi = highs[i]
+        lo = lows[i]
+        for j in range(1, period):
+            if highs[i - j] > hi:
+                hi = highs[i - j]
+            if lows[i - j] < lo:
+                lo = lows[i - j]
+        upper[i] = hi
+        lower[i] = lo
+        middle[i] = (hi + lo) * 0.5
+    return upper, middle, lower
+
+
+def pivot_classic(high: float, low: float, close: float) -> dict[str, float]:
+    """Classic Pivot Points.
+
+    p  = (high + low + close) / 3
+    r1 = 2*p - low;  r2 = p + (high - low);  r3 = p + 2*(high - low)
+    s1 = 2*p - high; s2 = p - (high - low);  s3 = p - 2*(high - low)
+    Returns {'p', 'r1', 's1', 'r2', 's2', 'r3', 's3'}.
+    Matches cpp/ af_pivot_classic.
+    """
+    p = (high + low + close) / 3.0
+    r = high - low
+    return {
+        'p':  p,
+        'r1': 2.0 * p - low,
+        'r2': p + r,
+        'r3': p + 2.0 * r,
+        's1': 2.0 * p - high,
+        's2': p - r,
+        's3': p - 2.0 * r,
+    }
+
+
+def pivot_fibonacci(high: float, low: float, close: float) -> dict[str, float]:
+    """Fibonacci Pivot Points.
+
+    p  = (high + low + close) / 3;  r = high - low
+    r1 = p + r*0.382; r2 = p + r*0.618; r3 = p + r*1.000
+    s1 = p - r*0.382; s2 = p - r*0.618; s3 = p - r*1.000
+    Returns {'p', 'r1', 's1', 'r2', 's2', 'r3', 's3'}.
+    Matches cpp/ af_pivot_fibonacci.
+    """
+    p = (high + low + close) / 3.0
+    r = high - low
+    return {
+        'p':  p,
+        'r1': p + r * 0.382,
+        'r2': p + r * 0.618,
+        'r3': p + r * 1.000,
+        's1': p - r * 0.382,
+        's2': p - r * 0.618,
+        's3': p - r * 1.000,
+    }
+
+
+def pivot_camarilla(high: float, low: float, close: float) -> dict[str, float]:
+    """Camarilla Pivot Points.
+
+    r = high - low
+    r4 = close + r*1.1/2;   r3 = close + r*1.1/4
+    r2 = close + r*1.1/6;   r1 = close + r*1.1/12
+    s1 = close - r*1.1/12;  s2 = close - r*1.1/6
+    s3 = close - r*1.1/4;   s4 = close - r*1.1/2  (extra level, returned as 's4')
+    Returns {'p', 'r1', 's1', 'r2', 's2', 'r3', 's3'} plus 'r4'/'s4'.
+    Note: cpp/ af_pivot_camarilla has r4/s4 but not p; we set p = (h+l+c)/3 for
+    consistency with the other pivot functions and include r4/s4 as extra keys.
+    Matches cpp/ af_pivot_camarilla.
+    """
+    r = high - low
+    return {
+        'p':  (high + low + close) / 3.0,
+        'r1': close + r * 1.1 / 12.0,
+        'r2': close + r * 1.1 / 6.0,
+        'r3': close + r * 1.1 / 4.0,
+        'r4': close + r * 1.1 / 2.0,
+        's1': close - r * 1.1 / 12.0,
+        's2': close - r * 1.1 / 6.0,
+        's3': close - r * 1.1 / 4.0,
+        's4': close - r * 1.1 / 2.0,
+    }
+
+
+def fibonacci(swing_high: float, swing_low: float,
+              uptrend: bool = True) -> list[float]:
+    """Fibonacci Retracement Levels.
+
+    Returns 7 levels: 0%, 23.6%, 38.2%, 50%, 61.8%, 78.6%, 100%.
+    If uptrend=True: levels[i] = swing_high - F[i] * (swing_high - swing_low)
+    If uptrend=False: levels[i] = swing_low + F[i] * (swing_high - swing_low)
+    Matches cpp/ af_fibonacci.
+    """
+    _FIBS = [0.0, 0.236, 0.382, 0.500, 0.618, 0.786, 1.000]
+    r = swing_high - swing_low
+    if uptrend:
+        return [swing_high - f * r for f in _FIBS]
+    else:
+        return [swing_low + f * r for f in _FIBS]
+
+
+def sar(highs: Sequence[float], lows: Sequence[float],
+        start: float = 0.02, step: float = 0.02, max_af: float = 0.2,
+        ) -> tuple[list[float | None], list[float | None]]:
+    """Parabolic SAR.
+
+    Returns (sar_values, is_bullish_flag) where is_bullish_flag[i] = 1.0 (bullish)
+    or 0.0 (bearish).
+    Initialises at index 0: sar[0] = lows[0], is_bullish[0] = 1.0.
+    Matches cpp/ af_sar exactly.
+    Raises ValueError for mismatched lengths or n < 2.
+    """
+    n = len(highs)
+    if len(lows) != n:
+        raise ValueError("highs and lows must have the same length")
+    if n < 2:
+        raise ValueError("sar requires at least 2 bars")
+    out_sar: list[float | None] = [None] * n
+    out_bull: list[float | None] = [None] * n
+    out_sar[0] = lows[0]
+    out_bull[0] = 1.0
+    ep = highs[0]
+    accel = start
+    for i in range(1, n):
+        bull = out_bull[i - 1] > 0.5  # type: ignore[operator]
+        prev_sar = out_sar[i - 1]
+        nep = ep
+        if bull:
+            sar_val = prev_sar + accel * (ep - prev_sar)  # type: ignore[operator]
+            # Clamp SAR below prior two lows
+            prev2_low = lows[i - 2] if i >= 2 else lows[i - 1]
+            sar_val = min(sar_val, lows[i - 1], prev2_low)
+            if lows[i] < sar_val:
+                # Reversal to bearish
+                sar_val = ep
+                nep = lows[i]
+                accel = start
+                bull = False
+            elif highs[i] > ep:
+                nep = highs[i]
+                accel = min(accel + step, max_af)
+        else:
+            sar_val = prev_sar - accel * (prev_sar - ep)  # type: ignore[operator]
+            # Clamp SAR above prior two highs
+            prev2_high = highs[i - 2] if i >= 2 else highs[i - 1]
+            sar_val = max(sar_val, highs[i - 1], prev2_high)
+            if highs[i] > sar_val:
+                # Reversal to bullish
+                sar_val = ep
+                nep = highs[i]
+                accel = start
+                bull = True
+            elif lows[i] < ep:
+                nep = lows[i]
+                accel = min(accel + step, max_af)
+        ep = nep
+        out_sar[i] = sar_val
+        out_bull[i] = 1.0 if bull else 0.0
+    return out_sar, out_bull
+
+
+def ichimoku(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
+             tenkan: int = 9, kijun: int = 26, senkou_b: int = 52,
+             ) -> tuple[list[float | None], list[float | None], list[float | None],
+                        list[float | None], list[float | None]]:
+    """Ichimoku Cloud.
+
+    tenkan_sen  = (highest_high + lowest_low) / 2  over `tenkan` bars
+    kijun_sen   = (highest_high + lowest_low) / 2  over `kijun` bars
+    senkou_a    = (tenkan + kijun) / 2, shifted forward by `kijun` bars
+    senkou_b    = (highest_high + lowest_low) / 2  over `senkou_b` bars,
+                  shifted forward by `kijun` bars
+    chikou      = close shifted back by `kijun` bars
+
+    Returns (tenkan_sen, kijun_sen, senkou_a, senkou_b, chikou).
+    All output arrays have length n; leading/trailing Nones where undefined.
+    Matches cpp/ af_ichimoku (shift = kijun).
+    Raises ValueError for invalid periods or mismatched lengths.
+    """
+    _check_period(tenkan)
+    _check_period(kijun)
+    _check_period(senkou_b)
+    n = len(highs)
+    if not (len(lows) == n and len(closes) == n):
+        raise ValueError("highs, lows, closes must all have the same length")
+
+    shift = kijun  # cpp/ uses kijun as the shift
+
+    out_t: list[float | None] = [None] * n
+    out_k: list[float | None] = [None] * n
+    out_sa: list[float | None] = [None] * n
+    out_sb: list[float | None] = [None] * n
+    out_ch: list[float | None] = [None] * n
+
+    for i in range(n):
+        # Tenkan-sen
+        if i >= tenkan - 1:
+            hi = highs[i]
+            lo = lows[i]
+            for j in range(1, tenkan):
+                if highs[i - j] > hi:
+                    hi = highs[i - j]
+                if lows[i - j] < lo:
+                    lo = lows[i - j]
+            out_t[i] = (hi + lo) / 2.0
+        # Kijun-sen
+        if i >= kijun - 1:
+            hi = highs[i]
+            lo = lows[i]
+            for j in range(1, kijun):
+                if highs[i - j] > hi:
+                    hi = highs[i - j]
+                if lows[i - j] < lo:
+                    lo = lows[i - j]
+            out_k[i] = (hi + lo) / 2.0
+
+    # Senkou A: shifted forward by `shift`
+    for i in range(n):
+        dst = i + shift
+        if dst < n and out_t[i] is not None and out_k[i] is not None:
+            out_sa[dst] = (out_t[i] + out_k[i]) / 2.0  # type: ignore[operator]
+
+    # Senkou B: shifted forward by `shift`
+    for i in range(n):
+        if i >= senkou_b - 1:
+            hi = highs[i]
+            lo = lows[i]
+            for j in range(1, senkou_b):
+                if highs[i - j] > hi:
+                    hi = highs[i - j]
+                if lows[i - j] < lo:
+                    lo = lows[i - j]
+            dst = i + shift
+            if dst < n:
+                out_sb[dst] = (hi + lo) / 2.0
+
+    # Chikou: close shifted back by `shift` (close[i] goes to index i - shift)
+    for i in range(shift, n):
+        out_ch[i - shift] = closes[i]
+
+    return out_t, out_k, out_sa, out_sb, out_ch

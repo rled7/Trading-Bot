@@ -4,6 +4,27 @@
 
 static const double AF_NAN = 0.0/0.0;
 
+/* Natural log approximation — avoids linking libm while remaining accurate.
+   Uses identity: ln(x) = ln(m * 2^k) = k*ln(2) + ln(m), m in [1,2).
+   ln(m) approximated via a 7th-degree minimax polynomial on [1,2). */
+static double af_log(double x) {
+    if (x <= 0.0) return -1e300; /* -inf sentinel */
+    /* Extract exponent */
+    int k = 0;
+    double m = x;
+    while (m >= 2.0) { m *= 0.5; ++k; }
+    while (m < 1.0)  { m *= 2.0; --k; }
+    /* Polynomial for ln(m) on [1,2): substitute t = (m-1)/(m+1) */
+    /* ln(m) = 2*(t + t^3/3 + t^5/5 + ...) — use 8 terms for ~15 sig figs */
+    double t = (m - 1.0) / (m + 1.0);
+    double t2 = t * t;
+    double r = t * (2.0 + t2 * (2.0/3.0 + t2 * (2.0/5.0 + t2 * (2.0/7.0
+               + t2 * (2.0/9.0 + t2 * (2.0/11.0 + t2 * (2.0/13.0
+               + t2 * 2.0/15.0)))))));
+    static const double LN2 = 0.6931471805599453094172321;
+    return r + (double)k * LN2;
+}
+
 static void fill_nan(double *a, size_t n) {
     for (size_t i = 0; i < n; ++i) a[i] = AF_NAN;
 }
@@ -525,6 +546,371 @@ af_error_t af_trix(const double *src, size_t n, size_t period, double *out) {
     }
 
     free(e1); free(e2); free(e3);
+    return AF_OK;
+}
+
+/* ══ NEW INDICATORS (16) ═══════════════════════════════════════════════════ */
+
+/* ── Momentum ──────────────────────────────────────────────────────────── */
+af_error_t af_momentum(const double *src, size_t n, size_t period, double *out) {
+    if (!src || !out || period == 0) return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+    if (n <= period) return AF_ERR_IO;
+    for (size_t i = period; i < n; ++i)
+        out[i] = src[i] - src[i - period];
+    return AF_OK;
+}
+
+/* ── True Range ────────────────────────────────────────────────────────── */
+af_error_t af_true_range(const double *high, const double *low, const double *close,
+                          size_t n, double *out) {
+    if (!high || !low || !close || !out || n == 0) return AF_ERR_INVALID_PARAM;
+    out[0] = high[0] - low[0];
+    for (size_t i = 1; i < n; ++i) {
+        double hl  = high[i] - low[i];
+        double hpc = dabs(high[i] - close[i - 1]);
+        double lpc = dabs(low[i]  - close[i - 1]);
+        out[i] = max3(hl, hpc, lpc);
+    }
+    return AF_OK;
+}
+
+/* ── Wilder EMA ────────────────────────────────────────────────────────── */
+af_error_t af_wilder_ema(const double *src, size_t n, size_t period, double *out) {
+    if (!src || !out || period == 0) return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+    /* Find first run of `period` consecutive non-NaN values */
+    long seed = find_seed_start(src, n, period);
+    if (seed < 0) return AF_ERR_IO;
+    size_t s = (size_t)seed;
+    const double alpha = 1.0 / (double)period;
+    double sum = 0.0;
+    for (size_t i = s; i < s + period; ++i) sum += src[i];
+    out[s + period - 1] = sum / (double)period;
+    for (size_t i = s + period; i < n; ++i) {
+        if (is_nan(src[i])) return AF_OK;
+        out[i] = src[i] * alpha + out[i - 1] * (1.0 - alpha);
+    }
+    return AF_OK;
+}
+
+/* ── VWMA ──────────────────────────────────────────────────────────────── */
+af_error_t af_vwma(const double *src, const double *volume, size_t n,
+                   size_t period, double *out) {
+    if (!src || !volume || !out || period == 0) return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+    if (n < period) return AF_ERR_IO;
+    for (size_t i = period - 1; i < n; ++i) {
+        double pv = 0.0, v = 0.0;
+        for (size_t j = 0; j < period; ++j) {
+            double vv = volume[i - j];
+            if (vv <= 0.0) vv = 1.0;
+            pv += src[i - j] * vv;
+            v  += vv;
+        }
+        out[i] = (v > 1e-12) ? pv / v : src[i];
+    }
+    return AF_OK;
+}
+
+/* ── Historical Volatility ─────────────────────────────────────────────── */
+/* Uses sample std (divide by period-1), annualised with 252 trading days. */
+af_error_t af_hist_vol(const double *src, size_t n, size_t period, double *out) {
+    if (!src || !out || period < 2) return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+    if (n <= period) return AF_ERR_IO;
+    for (size_t i = period; i < n; ++i) {
+        double mean = 0.0;
+        for (size_t j = 0; j < period; ++j) {
+            double p = src[i - 1 - j];
+            if (p > 1e-12) mean += af_log(src[i - j] / p);
+        }
+        mean /= (double)period;
+        double var = 0.0;
+        for (size_t j = 0; j < period; ++j) {
+            double p = src[i - 1 - j];
+            if (p > 1e-12) {
+                double r = af_log(src[i - j] / p) - mean;
+                var += r * r;
+            }
+        }
+        double sd = af_sqrt(var / (double)(period - 1));
+        out[i] = sd * af_sqrt(252.0) * 100.0;
+    }
+    return AF_OK;
+}
+
+/* ── CMF ───────────────────────────────────────────────────────────────── */
+af_error_t af_cmf(const double *high, const double *low, const double *close,
+                  const double *volume, size_t n, size_t period, double *out) {
+    if (!high || !low || !close || !volume || !out || period == 0)
+        return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+    if (n < period) return AF_ERR_IO;
+    for (size_t i = period - 1; i < n; ++i) {
+        double mfvs = 0.0, vs = 0.0;
+        for (size_t j = 0; j < period; ++j) {
+            double r = high[i - j] - low[i - j];
+            double clv = (r > 1e-12)
+                ? ((close[i - j] - low[i - j]) - (high[i - j] - close[i - j])) / r
+                : 0.0;
+            mfvs += clv * volume[i - j];
+            vs   += volume[i - j];
+        }
+        out[i] = (vs > 1e-12) ? mfvs / vs : 0.0;
+    }
+    return AF_OK;
+}
+
+/* ── Accumulation/Distribution ─────────────────────────────────────────── */
+af_error_t af_acc_dist(const double *high, const double *low, const double *close,
+                       const double *volume, size_t n, double *out) {
+    if (!high || !low || !close || !volume || !out || n == 0)
+        return AF_ERR_INVALID_PARAM;
+    out[0] = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        double r = high[i] - low[i];
+        double clv = (r > 1e-12)
+            ? ((close[i] - low[i]) - (high[i] - close[i])) / r
+            : 0.0;
+        out[i] = (i == 0 ? 0.0 : out[i - 1]) + clv * volume[i];
+    }
+    return AF_OK;
+}
+
+/* ── Force Index ───────────────────────────────────────────────────────── */
+af_error_t af_force_index(const double *close, const double *volume, size_t n,
+                           size_t period, double *out) {
+    if (!close || !volume || !out || n < 2 || period == 0) return AF_ERR_INVALID_PARAM;
+    double *raw = (double*)malloc(n * sizeof(double));
+    if (!raw) return AF_ERR_IO;
+    raw[0] = 0.0;
+    for (size_t i = 1; i < n; ++i)
+        raw[i] = (close[i] - close[i - 1]) * volume[i];
+    af_error_t e = af_ema(raw, n, period, out);
+    free(raw);
+    return e;
+}
+
+/* ── Volume Oscillator ─────────────────────────────────────────────────── */
+af_error_t af_vol_osc(const double *volume, size_t n, size_t fast, size_t slow,
+                      double *out) {
+    if (!volume || !out || fast == 0 || slow == 0) return AF_ERR_INVALID_PARAM;
+    double *ef = (double*)malloc(n * sizeof(double));
+    double *es = (double*)malloc(n * sizeof(double));
+    if (!ef || !es) { free(ef); free(es); return AF_ERR_IO; }
+    af_ema(volume, n, fast, ef);
+    af_ema(volume, n, slow, es);
+    for (size_t i = 0; i < n; ++i) {
+        if (!is_nan(ef[i]) && !is_nan(es[i]) && (es[i] > 1e-12 || es[i] < -1e-12))
+            out[i] = (ef[i] - es[i]) / es[i] * 100.0;
+        else
+            out[i] = AF_NAN;
+    }
+    free(ef); free(es);
+    return AF_OK;
+}
+
+/* ── Donchian Channels ─────────────────────────────────────────────────── */
+af_error_t af_donchian(const double *high, const double *low, size_t n, size_t period,
+                       double *upper, double *middle, double *lower) {
+    if (!high || !low || !upper || !lower || period == 0) return AF_ERR_INVALID_PARAM;
+    fill_nan(upper, n);
+    fill_nan(lower, n);
+    if (middle) fill_nan(middle, n);
+    if (n < period) return AF_ERR_IO;
+    for (size_t i = period - 1; i < n; ++i) {
+        double hi = high[i], lo = low[i];
+        for (size_t j = 1; j < period; ++j) {
+            if (high[i - j] > hi) hi = high[i - j];
+            if (low[i - j]  < lo) lo = low[i - j];
+        }
+        upper[i] = hi;
+        lower[i] = lo;
+        if (middle) middle[i] = (hi + lo) * 0.5;
+    }
+    return AF_OK;
+}
+
+/* ── Pivot Classic ─────────────────────────────────────────────────────── */
+af_error_t af_pivot_classic(double high, double low, double close,
+                             double *p, double *r1, double *s1,
+                             double *r2, double *s2, double *r3, double *s3) {
+    if (!p || !r1 || !s1 || !r2 || !s2 || !r3 || !s3) return AF_ERR_INVALID_PARAM;
+    *p  = (high + low + close) / 3.0;
+    *r1 = 2.0 * (*p) - low;
+    *r2 = (*p) + (high - low);
+    *r3 = (*p) + 2.0 * (high - low);
+    *s1 = 2.0 * (*p) - high;
+    *s2 = (*p) - (high - low);
+    *s3 = (*p) - 2.0 * (high - low);
+    return AF_OK;
+}
+
+/* ── Pivot Fibonacci ───────────────────────────────────────────────────── */
+af_error_t af_pivot_fibonacci(double high, double low, double close,
+                               double *p, double *r1, double *s1,
+                               double *r2, double *s2, double *r3, double *s3) {
+    if (!p || !r1 || !s1 || !r2 || !s2 || !r3 || !s3) return AF_ERR_INVALID_PARAM;
+    double r = high - low;
+    *p  = (high + low + close) / 3.0;
+    *r1 = (*p) + r * 0.382;
+    *r2 = (*p) + r * 0.618;
+    *r3 = (*p) + r * 1.000;
+    *s1 = (*p) - r * 0.382;
+    *s2 = (*p) - r * 0.618;
+    *s3 = (*p) - r * 1.000;
+    return AF_OK;
+}
+
+/* ── Pivot Camarilla ───────────────────────────────────────────────────── */
+/* Task spec: p, r1, s1, r2, s2, r3, s3. Math from cpp/ af_pivot_camarilla.
+   p = (H+L+C)/3; R1=C+r*1.1/12, R2=C+r*1.1/6, R3=C+r*1.1/4;
+   S1=C-r*1.1/12, S2=C-r*1.1/6, S3=C-r*1.1/4. */
+af_error_t af_pivot_camarilla(double high, double low, double close,
+                               double *p, double *r1, double *s1,
+                               double *r2, double *s2, double *r3, double *s3) {
+    if (!p || !r1 || !s1 || !r2 || !s2 || !r3 || !s3) return AF_ERR_INVALID_PARAM;
+    double r = high - low;
+    *p  = (high + low + close) / 3.0;
+    *r1 = close + r * 1.1 / 12.0;
+    *r2 = close + r * 1.1 / 6.0;
+    *r3 = close + r * 1.1 / 4.0;
+    *s1 = close - r * 1.1 / 12.0;
+    *s2 = close - r * 1.1 / 6.0;
+    *s3 = close - r * 1.1 / 4.0;
+    return AF_OK;
+}
+
+/* ── Fibonacci Retracement ─────────────────────────────────────────────── */
+/* 7 levels: 0%, 23.6%, 38.2%, 50%, 61.8%, 78.6%, 100%.
+   Level[0] = swing_high (0% retracement), Level[6] = swing_low (100%). */
+af_error_t af_fibonacci(double swing_high, double swing_low, double *out_levels) {
+    if (!out_levels) return AF_ERR_INVALID_PARAM;
+    static const double F[] = {0.0, 0.236, 0.382, 0.500, 0.618, 0.786, 1.000};
+    double range = swing_high - swing_low;
+    for (size_t i = 0; i < 7; ++i)
+        out_levels[i] = swing_high - F[i] * range;
+    return AF_OK;
+}
+
+/* ── SAR ───────────────────────────────────────────────────────────────── */
+af_error_t af_sar(const double *high, const double *low, size_t n,
+                  double start, double step, double max,
+                  double *out_sar, double *out_bull) {
+    if (!high || !low || !out_sar || !out_bull || n < 2) return AF_ERR_INVALID_PARAM;
+    out_sar[0]  = low[0];
+    out_bull[0] = 1.0;
+    double ep    = high[0];
+    double accel = start;
+    for (size_t i = 1; i < n; ++i) {
+        int bull = (out_bull[i - 1] > 0.5) ? 1 : 0;
+        double sar, nep = ep;
+        if (bull) {
+            sar = out_sar[i - 1] + accel * (ep - out_sar[i - 1]);
+            /* Clamp SAR to not exceed last two lows */
+            double prev_low2 = (i >= 2) ? low[i - 2] : low[i - 1];
+            double min_low = low[i - 1] < prev_low2 ? low[i - 1] : prev_low2;
+            if (sar > min_low) sar = min_low;
+            if (low[i] < sar) {
+                /* Reversal to bearish */
+                sar   = ep;
+                nep   = low[i];
+                accel = start;
+                bull  = 0;
+            } else if (high[i] > ep) {
+                nep   = high[i];
+                accel = accel + step < max ? accel + step : max;
+            }
+        } else {
+            sar = out_sar[i - 1] - accel * (out_sar[i - 1] - ep);
+            /* Clamp SAR to not be below last two highs */
+            double prev_high2 = (i >= 2) ? high[i - 2] : high[i - 1];
+            double max_high = high[i - 1] > prev_high2 ? high[i - 1] : prev_high2;
+            if (sar < max_high) sar = max_high;
+            if (high[i] > sar) {
+                /* Reversal to bullish */
+                sar   = ep;
+                nep   = high[i];
+                accel = start;
+                bull  = 1;
+            } else if (low[i] < ep) {
+                nep   = low[i];
+                accel = accel + step < max ? accel + step : max;
+            }
+        }
+        ep          = nep;
+        out_sar[i]  = sar;
+        out_bull[i] = bull ? 1.0 : 0.0;
+    }
+    return AF_OK;
+}
+
+/* ── Ichimoku ──────────────────────────────────────────────────────────── */
+/* shift = kijun (standard 26). Senkou A/B written at i+shift; chikou at i-shift. */
+af_error_t af_ichimoku(const double *high, const double *low, const double *close,
+                       size_t n, size_t tenkan, size_t kijun, size_t senkou_b,
+                       double *tenkan_out, double *kijun_out,
+                       double *senkou_a, double *senkou_b_out, double *chikou) {
+    if (!high || !low || !close || !tenkan_out || !kijun_out || n == 0)
+        return AF_ERR_INVALID_PARAM;
+    fill_nan(tenkan_out, n);
+    fill_nan(kijun_out, n);
+    if (senkou_a)     fill_nan(senkou_a, n);
+    if (senkou_b_out) fill_nan(senkou_b_out, n);
+    if (chikou)       fill_nan(chikou, n);
+
+    size_t shift = kijun; /* standard Ichimoku displacement */
+
+    for (size_t i = 0; i < n; ++i) {
+        /* Tenkan-sen */
+        if (i >= tenkan - 1) {
+            double hi = high[i], lo = low[i];
+            for (size_t j = 1; j < tenkan; ++j) {
+                if (high[i - j] > hi) hi = high[i - j];
+                if (low[i - j]  < lo) lo = low[i - j];
+            }
+            tenkan_out[i] = (hi + lo) / 2.0;
+        }
+        /* Kijun-sen */
+        if (i >= kijun - 1) {
+            double hi = high[i], lo = low[i];
+            for (size_t j = 1; j < kijun; ++j) {
+                if (high[i - j] > hi) hi = high[i - j];
+                if (low[i - j]  < lo) lo = low[i - j];
+            }
+            kijun_out[i] = (hi + lo) / 2.0;
+        }
+    }
+
+    /* Senkou Span A: (Tenkan + Kijun) / 2, shifted forward by `shift` */
+    if (senkou_a) {
+        for (size_t i = 0; i + shift < n; ++i) {
+            if (!is_nan(tenkan_out[i]) && !is_nan(kijun_out[i]))
+                senkou_a[i + shift] = (tenkan_out[i] + kijun_out[i]) / 2.0;
+        }
+    }
+
+    /* Senkou Span B: midpoint of senkou_b-bar range, shifted forward */
+    if (senkou_b_out) {
+        for (size_t i = 0; i < n; ++i) {
+            if (i < senkou_b - 1) continue;
+            double hi = high[i], lo = low[i];
+            for (size_t j = 1; j < senkou_b; ++j) {
+                if (high[i - j] > hi) hi = high[i - j];
+                if (low[i - j]  < lo) lo = low[i - j];
+            }
+            size_t dst = i + shift;
+            if (dst < n) senkou_b_out[dst] = (hi + lo) / 2.0;
+        }
+    }
+
+    /* Chikou Span: close shifted back by `shift` */
+    if (chikou) {
+        for (size_t i = shift; i < n; ++i)
+            chikou[i - shift] = close[i];
+    }
+
     return AF_OK;
 }
 

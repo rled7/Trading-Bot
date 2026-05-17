@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 
 import { sma, ema, rsi, atr, macd, bollinger, stochastic, obv, adx,
          wma, cci, williamsR, roc, mfi, vwap, keltner,
-         hma, dema, tema, trix } from "../src/indicators.js";
+         hma, dema, tema, trix,
+         momentum, trueRange, wilderEma, vwma, histVol,
+         cmf, accDist, forceIndex, volOsc,
+         donchian, pivotClassic, pivotFibonacci, pivotCamarilla,
+         fibonacci, sar, ichimoku } from "../src/indicators.js";
 
 // ── SMA ──────────────────────────────────────────────────────────────────
 test("sma: invalid period throws", () => {
@@ -892,4 +896,499 @@ test("trix: known output direction on rising data", () => {
 
 test("trix: output length equals input length", () => {
     assert.equal(trix(Array(30).fill(1), 5).length, 30);
+});
+
+// ── Momentum ──────────────────────────────────────────────────────────────────
+test("momentum: invalid period throws", () => {
+    assert.throws(() => momentum([1, 2, 3], 0));
+    assert.throws(() => momentum([1, 2, 3], -1));
+    assert.throws(() => momentum([1, 2, 3], 1.5));
+});
+
+test("momentum: insufficient data returns all nulls (n <= period)", () => {
+    assert.ok(momentum([1, 2, 3, 4, 5], 5).every(v => v === null));
+});
+
+test("momentum: first valid index at period", () => {
+    const out = momentum([10, 20, 30, 40, 50], 3);
+    assert.equal(out[0], null);
+    assert.equal(out[1], null);
+    assert.equal(out[2], null);
+    assert.ok(out[3] !== null);
+});
+
+test("momentum: known value", () => {
+    // period=1: out[1] = 20 - 10 = 10
+    const out = momentum([10, 20, 30], 1);
+    assert.ok(Math.abs(out[1] - 10) < 1e-12);
+    assert.ok(Math.abs(out[2] - 10) < 1e-12);
+});
+
+test("momentum: constant input yields zero", () => {
+    const out = momentum(Array(20).fill(5), 3);
+    for (let i = 3; i < 20; i++) assert.ok(Math.abs(out[i]) < 1e-12);
+});
+
+test("momentum: output length equals input length", () => {
+    assert.equal(momentum([1, 2, 3, 4, 5], 2).length, 5);
+});
+
+// ── True Range ────────────────────────────────────────────────────────────────
+test("trueRange: mismatched lengths throw", () => {
+    assert.throws(() => trueRange([1, 2, 3], [0, 1], [1, 1, 1]));
+    assert.throws(() => trueRange([1, 2, 3], [0, 1, 2], [1, 1]));
+});
+
+test("trueRange: empty input returns empty", () => {
+    assert.deepEqual(trueRange([], [], []), []);
+});
+
+test("trueRange: first bar is high - low", () => {
+    const out = trueRange([12], [8], [10]);
+    assert.ok(Math.abs(out[0] - 4) < 1e-12);
+});
+
+test("trueRange: non-negative always", () => {
+    const n = 30;
+    const h = Array.from({ length: n }, (_, i) => 100 + Math.sin(i) * 3);
+    const l = Array.from({ length: n }, (_, i) => 100 + Math.sin(i) * 3 - 2);
+    const c = Array.from({ length: n }, (_, i) => 100 + Math.sin(i) * 3 - 1);
+    const out = trueRange(h, l, c);
+    for (const v of out) assert.ok(v >= 0);
+});
+
+test("trueRange: known second bar uses prev close", () => {
+    // h=[10,8], l=[6,4], c=[8,6]
+    // tr[0]=10-6=4; tr[1]=max(8-4=4, |8-8|=0, |4-8|=4)=4
+    const out = trueRange([10, 8], [6, 4], [8, 6]);
+    assert.ok(Math.abs(out[0] - 4) < 1e-12);
+    assert.ok(Math.abs(out[1] - 4) < 1e-12);
+});
+
+test("trueRange: output length equals input length", () => {
+    const n = 15;
+    assert.equal(trueRange(Array(n).fill(10), Array(n).fill(8), Array(n).fill(9)).length, n);
+});
+
+// ── Wilder EMA ────────────────────────────────────────────────────────────────
+test("wilderEma: invalid period throws", () => {
+    assert.throws(() => wilderEma([1, 2, 3], 0));
+    assert.throws(() => wilderEma([1, 2, 3], -1));
+});
+
+test("wilderEma: insufficient data returns all nulls", () => {
+    assert.ok(wilderEma([1, 2], 5).every(v => v === null));
+});
+
+test("wilderEma: constant input stays constant", () => {
+    const out = wilderEma(Array(30).fill(7), 5);
+    for (let i = 4; i < 30; i++) assert.ok(Math.abs(out[i] - 7) < 1e-10);
+});
+
+test("wilderEma: responds slower than EMA (alpha=1/p vs 2/(p+1))", () => {
+    // A step-up; Wilder EMA should be slower (lower at same index)
+    const data = Array(10).fill(100).concat(Array(20).fill(110));
+    const outWilder = wilderEma(data, 5);
+    const outEma    = ema(data, 5);
+    // Both defined at last index; Wilder should be less responsive (closer to 100)
+    const last = data.length - 1;
+    assert.ok(outWilder[last] < outEma[last]);
+});
+
+test("wilderEma: output length equals input length", () => {
+    assert.equal(wilderEma(Array(20).fill(1), 5).length, 20);
+});
+
+// ── VWMA ─────────────────────────────────────────────────────────────────────
+test("vwma: invalid period throws", () => {
+    assert.throws(() => vwma([1, 2, 3], [100, 200, 300], 0));
+});
+
+test("vwma: mismatched lengths throw", () => {
+    assert.throws(() => vwma([1, 2, 3], [100, 200], 2));
+});
+
+test("vwma: insufficient data returns all nulls", () => {
+    assert.ok(vwma([1, 2], [100, 200], 5).every(v => v === null));
+});
+
+test("vwma: constant price returns that price", () => {
+    const out = vwma(Array(20).fill(5), Array(20).fill(100), 5);
+    for (let i = 4; i < 20; i++) assert.ok(Math.abs(out[i] - 5) < 1e-10);
+});
+
+test("vwma: higher volume on higher price increases average", () => {
+    // period=2: prices=[1,3], vols=[1,10] → vwma = (1*1+3*10)/(1+10) ≈ 2.818
+    const out = vwma([1, 3], [1, 10], 2);
+    assert.ok(out[1] > 2 && out[1] < 3);
+});
+
+test("vwma: output length equals input length", () => {
+    assert.equal(vwma(Array(10).fill(1), Array(10).fill(100), 3).length, 10);
+});
+
+// ── Historical Volatility ─────────────────────────────────────────────────────
+test("histVol: invalid period throws", () => {
+    assert.throws(() => histVol([1, 2, 3], 0));
+    assert.throws(() => histVol([1, 2, 3], -1));
+});
+
+test("histVol: insufficient data returns all nulls (n <= period)", () => {
+    assert.ok(histVol([1, 2, 3, 4, 5], 5).every(v => v === null));
+});
+
+test("histVol: first valid index at period", () => {
+    const data = Array.from({ length: 20 }, (_, i) => 100 + i * 0.01);
+    const out = histVol(data, 5);
+    assert.equal(out[4], null);
+    assert.ok(out[5] !== null);
+});
+
+test("histVol: non-negative always", () => {
+    const data = Array.from({ length: 50 }, (_, i) => 100 + Math.sin(i * 0.3) * 5);
+    const out = histVol(data, 10);
+    for (const v of out) {
+        if (v !== null) assert.ok(v >= 0);
+    }
+});
+
+test("histVol: constant prices yield zero vol", () => {
+    const out = histVol(Array(30).fill(100), 10);
+    for (let i = 10; i < 30; i++) {
+        if (out[i] !== null) assert.ok(Math.abs(out[i]) < 1e-10);
+    }
+});
+
+test("histVol: output length equals input length", () => {
+    assert.equal(histVol(Array(20).fill(100), 5).length, 20);
+});
+
+// ── CMF ──────────────────────────────────────────────────────────────────────
+test("cmf: invalid period throws", () => {
+    assert.throws(() => cmf([1], [0], [1], [100], 0));
+});
+
+test("cmf: mismatched lengths throw", () => {
+    assert.throws(() => cmf([1, 2], [0], [1, 1], [100, 200], 1));
+});
+
+test("cmf: insufficient data returns all nulls", () => {
+    const h = Array(3).fill(1), l = Array(3).fill(0), c = Array(3).fill(0.5), v = Array(3).fill(100);
+    assert.ok(cmf(h, l, c, v, 5).every(x => x === null));
+});
+
+test("cmf: stays in [-1, 1]", () => {
+    const n = 50;
+    const h = [], l = [], c = [], v = [];
+    for (let i = 0; i < n; i++) {
+        const mid = 100 + Math.sin(i * 0.3) * 5;
+        h.push(mid + 2); l.push(mid - 2); c.push(mid);
+        v.push(1000 + (i % 5) * 200);
+    }
+    const out = cmf(h, l, c, v, 10);
+    for (const val of out) {
+        if (val !== null) assert.ok(val >= -1 - 1e-10 && val <= 1 + 1e-10);
+    }
+});
+
+test("cmf: close at high yields positive cmf", () => {
+    // When close = high, CLV = 1; all positive money flow → cmf near 1
+    const n = 25;
+    const h = Array.from({ length: n }, (_, i) => 10 + i * 0.1);
+    const l = Array.from({ length: n }, (_, i) =>  8 + i * 0.1);
+    const c = h.slice(); // close == high → CLV = 1
+    const v = Array(n).fill(1000);
+    const out = cmf(h, l, c, v, 10);
+    for (let i = 9; i < n; i++) assert.ok(Math.abs(out[i] - 1) < 1e-10);
+});
+
+test("cmf: output length equals input length", () => {
+    const n = 20;
+    assert.equal(cmf(Array(n).fill(1), Array(n).fill(0), Array(n).fill(0.5), Array(n).fill(100), 5).length, n);
+});
+
+// ── Accumulation/Distribution ─────────────────────────────────────────────────
+test("accDist: mismatched lengths throw", () => {
+    assert.throws(() => accDist([1, 2], [0], [1, 1], [100, 200]));
+    assert.throws(() => accDist([1, 2], [0, 1], [1, 1], [100]));
+});
+
+test("accDist: empty input returns empty", () => {
+    assert.deepEqual(accDist([], [], [], []), []);
+});
+
+test("accDist: first value is 0 when range > 0", () => {
+    // First bar: H=10, L=8, C=10 → CLV=1, out[0]=0+1*100=100... wait, out[0] = 0 + clv*vol
+    // But cpp/ has out[0] = (i==0 ? 0 : out[i-1]) + clv*vol[i] = 0 + clv*vol[0]
+    const out = accDist([10], [8], [9], [100]);
+    // CLV = ((9-8)-(10-9))/(10-8) = (1-1)/2 = 0, so out[0] = 0
+    assert.ok(Math.abs(out[0]) < 1e-12);
+});
+
+test("accDist: known values", () => {
+    // H=10, L=8, C=10 → CLV = ((10-8)-(10-10))/(10-8) = 2/2 = 1; out[0]=0+1*100=100
+    // H=10, L=8, C=8  → CLV = ((8-8)-(10-8))/(10-8) = -2/2 = -1; out[1]=100+(-1)*200=-100
+    const out = accDist([10, 10], [8, 8], [10, 8], [100, 200]);
+    assert.ok(Math.abs(out[0] - 100) < 1e-12);
+    assert.ok(Math.abs(out[1] - (-100)) < 1e-12);
+});
+
+test("accDist: output length equals input length", () => {
+    const n = 15;
+    assert.equal(accDist(Array(n).fill(10), Array(n).fill(8), Array(n).fill(9), Array(n).fill(100)).length, n);
+});
+
+// ── Force Index ───────────────────────────────────────────────────────────────
+test("forceIndex: invalid period throws", () => {
+    assert.throws(() => forceIndex([1, 2, 3], [100, 200, 300], 0));
+});
+
+test("forceIndex: mismatched lengths throw", () => {
+    assert.throws(() => forceIndex([1, 2, 3], [100, 200], 2));
+});
+
+test("forceIndex: insufficient data returns all nulls", () => {
+    const out = forceIndex(Array(3).fill(10), Array(3).fill(100), 5);
+    assert.ok(out.every(v => v === null));
+});
+
+test("forceIndex: constant close yields zero", () => {
+    const out = forceIndex(Array(30).fill(10), Array(30).fill(1000), 5);
+    for (const v of out) {
+        if (v !== null) assert.ok(Math.abs(v) < 1e-10);
+    }
+});
+
+test("forceIndex: output length equals input length", () => {
+    assert.equal(forceIndex(Array(20).fill(10), Array(20).fill(1000), 3).length, 20);
+});
+
+// ── Volume Oscillator ─────────────────────────────────────────────────────────
+test("volOsc: invalid period throws", () => {
+    assert.throws(() => volOsc([100, 200, 300], 0, 28));
+    assert.throws(() => volOsc([100, 200, 300], 14, 0));
+});
+
+test("volOsc: insufficient data returns all nulls", () => {
+    const out = volOsc(Array(5).fill(100), 14, 28);
+    assert.ok(out.every(v => v === null));
+});
+
+test("volOsc: constant volume yields zero", () => {
+    const out = volOsc(Array(50).fill(1000), 5, 10);
+    for (const v of out) {
+        if (v !== null) assert.ok(Math.abs(v) < 1e-10);
+    }
+});
+
+test("volOsc: output length equals input length", () => {
+    assert.equal(volOsc(Array(40).fill(100), 5, 10).length, 40);
+});
+
+// ── Donchian Channel ──────────────────────────────────────────────────────────
+test("donchian: invalid period throws", () => {
+    assert.throws(() => donchian([1, 2], [0, 1], 0));
+});
+
+test("donchian: mismatched lengths throw", () => {
+    assert.throws(() => donchian([1, 2, 3], [0, 1], 2));
+});
+
+test("donchian: insufficient data returns all nulls", () => {
+    const { upper, middle, lower } = donchian([1, 2], [0, 1], 5);
+    assert.ok(upper.every(v => v === null));
+    assert.ok(middle.every(v => v === null));
+    assert.ok(lower.every(v => v === null));
+});
+
+test("donchian: upper >= middle >= lower always where defined", () => {
+    const n = 50;
+    const h = Array.from({ length: n }, (_, i) => 100 + Math.sin(i * 0.4) * 10 + 2);
+    const l = Array.from({ length: n }, (_, i) => 100 + Math.sin(i * 0.4) * 10 - 2);
+    const { upper, middle, lower } = donchian(h, l, 10);
+    for (let i = 0; i < n; i++) {
+        if (upper[i] !== null) {
+            assert.ok(upper[i] >= middle[i] - 1e-12);
+            assert.ok(middle[i] >= lower[i] - 1e-12);
+        }
+    }
+});
+
+test("donchian: known values on simple input", () => {
+    // period=3; at i=2: upper=max(10,11,12)=12, lower=min(8,9,10)=8, middle=10
+    const h = [10, 11, 12];
+    const l = [8,  9,  10];
+    const { upper, middle, lower } = donchian(h, l, 3);
+    assert.equal(upper[0], null); assert.equal(upper[1], null);
+    assert.ok(Math.abs(upper[2] - 12) < 1e-12);
+    assert.ok(Math.abs(lower[2] - 8)  < 1e-12);
+    assert.ok(Math.abs(middle[2] - 10) < 1e-12);
+});
+
+test("donchian: output length equals input length", () => {
+    const n = 20;
+    const { upper, middle, lower } = donchian(Array(n).fill(10), Array(n).fill(8), 5);
+    assert.equal(upper.length, n);
+    assert.equal(middle.length, n);
+    assert.equal(lower.length, n);
+});
+
+// ── Pivot Points (Classic) ────────────────────────────────────────────────────
+test("pivotClassic: known values", () => {
+    // H=12, L=8, C=10: P=(12+8+10)/3=10; R1=20-8=12; S1=20-12=8
+    const { p, r1, s1, r2, s2, r3, s3 } = pivotClassic(12, 8, 10);
+    assert.ok(Math.abs(p  - 10) < 1e-12);
+    assert.ok(Math.abs(r1 - 12) < 1e-12);
+    assert.ok(Math.abs(s1 -  8) < 1e-12);
+    assert.ok(r1 > p && p > s1);
+    assert.ok(r2 > r1);
+    assert.ok(s2 < s1);
+    assert.ok(r3 > r2);
+    assert.ok(s3 < s2);
+});
+
+test("pivotClassic: shape R1 > P > S1", () => {
+    const { p, r1, s1 } = pivotClassic(110, 90, 100);
+    assert.ok(r1 > p);
+    assert.ok(p > s1);
+});
+
+// ── Pivot Points (Fibonacci) ──────────────────────────────────────────────────
+test("pivotFibonacci: shape R1 > P > S1", () => {
+    const { p, r1, s1 } = pivotFibonacci(110, 90, 100);
+    assert.ok(r1 > p);
+    assert.ok(p > s1);
+});
+
+test("pivotFibonacci: known pivot value", () => {
+    // H=110, L=90, C=100: P=(110+90+100)/3=100; range=20
+    const { p, r1, r2, r3, s1, s2, s3 } = pivotFibonacci(110, 90, 100);
+    assert.ok(Math.abs(p - 100) < 1e-12);
+    assert.ok(Math.abs(r1 - (100 + 20 * 0.382)) < 1e-10);
+    assert.ok(Math.abs(s1 - (100 - 20 * 0.382)) < 1e-10);
+    assert.ok(r3 > r2 && r2 > r1);
+    assert.ok(s3 < s2 && s2 < s1);
+});
+
+// ── Pivot Points (Camarilla) ──────────────────────────────────────────────────
+test("pivotCamarilla: shape R1 > close > S1", () => {
+    const { r1, r2, r3, r4, s1, s2, s3, s4 } = pivotCamarilla(110, 90, 100);
+    assert.ok(r1 > 100 && s1 < 100);
+    assert.ok(r4 > r3 && r3 > r2 && r2 > r1);
+    assert.ok(s4 < s3 && s3 < s2 && s2 < s1);
+});
+
+test("pivotCamarilla: known r1 value", () => {
+    // H=110, L=90, C=100: r=20; r1=100+20*1.1/12
+    const { r1, s1 } = pivotCamarilla(110, 90, 100);
+    assert.ok(Math.abs(r1 - (100 + 20 * 1.1 / 12)) < 1e-10);
+    assert.ok(Math.abs(s1 - (100 - 20 * 1.1 / 12)) < 1e-10);
+});
+
+// ── Fibonacci Retracement ─────────────────────────────────────────────────────
+test("fibonacci: returns 7 levels", () => {
+    const levels = fibonacci(100, 80);
+    assert.equal(levels.length, 7);
+});
+
+test("fibonacci: first level is swingHigh, last is swingLow", () => {
+    const levels = fibonacci(100, 80);
+    assert.ok(Math.abs(levels[0] - 100) < 1e-12);
+    assert.ok(Math.abs(levels[6] - 80) < 1e-12);
+});
+
+test("fibonacci: levels are descending (uptrend)", () => {
+    const levels = fibonacci(100, 80);
+    for (let i = 1; i < 7; i++) assert.ok(levels[i] < levels[i - 1] + 1e-12);
+});
+
+test("fibonacci: known 50% level", () => {
+    const levels = fibonacci(100, 80);
+    // F[3]=0.5: level = 100 - 0.5*20 = 90
+    assert.ok(Math.abs(levels[3] - 90) < 1e-12);
+});
+
+// ── SAR ───────────────────────────────────────────────────────────────────────
+test("sar: mismatched lengths throw", () => {
+    assert.throws(() => sar([1, 2, 3], [0, 1]));
+});
+
+test("sar: n < 2 returns all nulls", () => {
+    const { sar: s, isBullish: b } = sar([10], [8]);
+    assert.ok(s.every(v => v === null));
+    assert.ok(b.every(v => v === null));
+});
+
+test("sar: output length equals input length", () => {
+    const n = 30;
+    const h = Array.from({ length: n }, (_, i) => 100 + i * 0.1 + 1);
+    const l = Array.from({ length: n }, (_, i) => 100 + i * 0.1);
+    const { sar: s, isBullish: b } = sar(h, l);
+    assert.equal(s.length, n);
+    assert.equal(b.length, n);
+});
+
+test("sar: isBullish is 0.0 or 1.0", () => {
+    const n = 30;
+    const h = Array.from({ length: n }, (_, i) => 100 + Math.sin(i * 0.3) * 5 + 2);
+    const l = Array.from({ length: n }, (_, i) => 100 + Math.sin(i * 0.3) * 5 - 2);
+    const { isBullish } = sar(h, l);
+    for (const v of isBullish) {
+        if (v !== null) assert.ok(v === 0.0 || v === 1.0);
+    }
+});
+
+test("sar: first bar is bullish with sar = low[0]", () => {
+    const { sar: s, isBullish: b } = sar([10, 11, 12], [8, 9, 10]);
+    assert.ok(Math.abs(s[0] - 8) < 1e-12);
+    assert.ok(b[0] === 1.0);
+});
+
+// ── Ichimoku ──────────────────────────────────────────────────────────────────
+test("ichimoku: invalid period throws", () => {
+    assert.throws(() => ichimoku([1], [0], [1], 0, 26, 52));
+    assert.throws(() => ichimoku([1], [0], [1], 9, 0, 52));
+    assert.throws(() => ichimoku([1], [0], [1], 9, 26, 0));
+});
+
+test("ichimoku: mismatched lengths throw", () => {
+    assert.throws(() => ichimoku([1, 2], [0], [1, 1], 9, 26, 52));
+    assert.throws(() => ichimoku([1, 2], [0, 1], [1], 9, 26, 52));
+});
+
+test("ichimoku: output length equals input length", () => {
+    const n = 60;
+    const h = Array(n).fill(11), l = Array(n).fill(9), c = Array(n).fill(10);
+    const { tenkan, kijun, senkouA, senkouB, chikou } = ichimoku(h, l, c, 9, 26, 52);
+    assert.equal(tenkan.length, n);
+    assert.equal(kijun.length, n);
+    assert.equal(senkouA.length, n);
+    assert.equal(senkouB.length, n);
+    assert.equal(chikou.length, n);
+});
+
+test("ichimoku: constant input — tenkan equals constant", () => {
+    const n = 60;
+    const h = Array(n).fill(11), l = Array(n).fill(9), c = Array(n).fill(10);
+    const { tenkan } = ichimoku(h, l, c, 9, 26, 52);
+    for (let i = 8; i < n; i++) assert.ok(Math.abs(tenkan[i] - 10) < 1e-10);
+});
+
+test("ichimoku: tenkan first valid at tenkan-1", () => {
+    const n = 60;
+    const h = Array(n).fill(11), l = Array(n).fill(9), c = Array(n).fill(10);
+    const { tenkan } = ichimoku(h, l, c, 9, 26, 52);
+    assert.equal(tenkan[7], null);
+    assert.ok(tenkan[8] !== null);
+});
+
+test("ichimoku: chikou shifted back by kijun", () => {
+    const n = 60;
+    const c = Array.from({ length: n }, (_, i) => 100 + i);
+    const h = c.map(v => v + 1);
+    const l = c.map(v => v - 1);
+    const kijun = 26;
+    const { chikou } = ichimoku(h, l, c, 9, kijun, 52);
+    // chikou[i] = close[i+kijun], so chikou[0] = close[26]
+    assert.ok(Math.abs(chikou[0] - c[kijun]) < 1e-12);
 });

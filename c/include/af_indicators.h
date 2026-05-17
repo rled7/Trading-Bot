@@ -100,4 +100,84 @@ af_error_t af_tema(const double *src, size_t n, size_t period, double *out);
    Matches cpp/ af_trix (trix output only; signal line not exposed here). */
 af_error_t af_trix(const double *src, size_t n, size_t period, double *out);
 
+/* ── New indicators (16) ────────────────────────────────────────────────── */
+
+/* MOMENTUM: out[i] = src[i] - src[i-period]. */
+af_error_t af_momentum(const double *src, size_t n, size_t period, double *out);
+
+/* TRUE RANGE: out[0] = high[0]-low[0]; out[i] = max(H-L, |H-prevC|, |L-prevC|). */
+af_error_t af_true_range(const double *high, const double *low, const double *close,
+                          size_t n, double *out);
+
+/* WILDER EMA: seed = SMA(period), then alpha = 1/period. */
+af_error_t af_wilder_ema(const double *src, size_t n, size_t period, double *out);
+
+/* VWMA: volume-weighted moving average over rolling `period` bars. */
+af_error_t af_vwma(const double *src, const double *volume, size_t n,
+                   size_t period, double *out);
+
+/* HIST_VOL: historical volatility = stdev(log-returns, period) * sqrt(252) * 100.
+   Uses sample std (divide by period-1). */
+af_error_t af_hist_vol(const double *src, size_t n, size_t period, double *out);
+
+/* CMF: Chaikin Money Flow over `period` bars. */
+af_error_t af_cmf(const double *high, const double *low, const double *close,
+                  const double *volume, size_t n, size_t period, double *out);
+
+/* ACC_DIST: Accumulation/Distribution Line. */
+af_error_t af_acc_dist(const double *high, const double *low, const double *close,
+                       const double *volume, size_t n, double *out);
+
+/* FORCE INDEX: EMA(period) of (close[i]-close[i-1])*volume[i]. */
+af_error_t af_force_index(const double *close, const double *volume, size_t n,
+                           size_t period, double *out);
+
+/* VOL_OSC: Volume Oscillator = (EMA(fast) - EMA(slow)) / EMA(slow) * 100. */
+af_error_t af_vol_osc(const double *volume, size_t n, size_t fast, size_t slow,
+                      double *out);
+
+/* DONCHIAN: upper = highest high, lower = lowest low over `period`.
+   middle = (upper + lower) / 2. */
+af_error_t af_donchian(const double *high, const double *low, size_t n, size_t period,
+                       double *upper, double *middle, double *lower);
+
+/* PIVOT_CLASSIC: p=(H+L+C)/3; R1=2p-L, R2=p+(H-L), R3=p+2(H-L);
+                  S1=2p-H, S2=p-(H-L), S3=p-2(H-L). */
+af_error_t af_pivot_classic(double high, double low, double close,
+                             double *p, double *r1, double *s1,
+                             double *r2, double *s2, double *r3, double *s3);
+
+/* PIVOT_FIBONACCI: p=(H+L+C)/3; R1=p+0.382*r, R2=p+0.618*r, R3=p+r;
+                    S1=p-0.382*r, S2=p-0.618*r, S3=p-r; r=H-L. */
+af_error_t af_pivot_fibonacci(double high, double low, double close,
+                               double *p, double *r1, double *s1,
+                               double *r2, double *s2, double *r3, double *s3);
+
+/* PIVOT_CAMARILLA: R1=C+r*1.1/12, R2=C+r*1.1/6, R3=C+r*1.1/4;
+                    S1=C-r*1.1/12, S2=C-r*1.1/6, S3=C-r*1.1/4; r=H-L.
+                    p = (H+L+C)/3. */
+af_error_t af_pivot_camarilla(double high, double low, double close,
+                               double *p, double *r1, double *s1,
+                               double *r2, double *s2, double *r3, double *s3);
+
+/* FIBONACCI retracement: 7 levels at 0%, 23.6%, 38.2%, 50%, 61.8%, 78.6%, 100%.
+   Levels run from swing_high (0%) down to swing_low (100%).
+   out_levels must be caller-allocated with at least 7 doubles. */
+af_error_t af_fibonacci(double swing_high, double swing_low, double *out_levels);
+
+/* SAR: Parabolic Stop and Reverse.
+   out_bull[i] = 1.0 if bullish, 0.0 if bearish. */
+af_error_t af_sar(const double *high, const double *low, size_t n,
+                  double start, double step, double max,
+                  double *out_sar, double *out_bull);
+
+/* ICHIMOKU: all output arrays length n.
+   shift is implicitly kijun (standard 26-bar displacement).
+   Senkou A and B are shifted forward by kijun bars (written at i+kijun).
+   Chikou is close shifted back by kijun bars (written at i-kijun). */
+af_error_t af_ichimoku(const double *high, const double *low, const double *close,
+                       size_t n, size_t tenkan, size_t kijun, size_t senkou_b,
+                       double *tenkan_out, double *kijun_out,
+                       double *senkou_a, double *senkou_b_out, double *chikou);
+
 #endif /* AF_INDICATORS_H */

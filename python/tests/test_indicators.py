@@ -5,6 +5,10 @@ from algoforge.indicators import (
     sma, ema, rsi, atr, macd, bollinger, stochastic, obv, adx,
     wma, cci, williams_r, roc, mfi, vwap, keltner,
     hma, dema, tema, trix,
+    momentum, true_range, wilder_ema, vwma, hist_vol,
+    cmf, acc_dist, force_index, vol_osc, donchian,
+    pivot_classic, pivot_fibonacci, pivot_camarilla,
+    fibonacci, sar, ichimoku,
 )
 
 
@@ -964,6 +968,609 @@ class TrixTests(unittest.TestCase):
         self.assertTrue(len(valid) > 0)
         for v in valid:
             self.assertLess(v, 0.0)
+
+
+class MomentumTests(unittest.TestCase):
+    def test_invalid_period(self):
+        with self.assertRaises(ValueError):
+            momentum([1.0, 2.0, 3.0], 0)
+
+    def test_insufficient_data_all_none(self):
+        out = momentum([1.0, 2.0], 5)
+        self.assertEqual(out, [None, None])
+
+    def test_known_values(self):
+        # momentum([10, 13, 16], period=1): out[0]=None, out[1]=3, out[2]=3
+        out = momentum([10.0, 13.0, 16.0], 1)
+        self.assertIsNone(out[0])
+        self.assertAlmostEqual(out[1], 3.0, places=10)
+        self.assertAlmostEqual(out[2], 3.0, places=10)
+
+    def test_known_values_period2(self):
+        # momentum([100, 105, 110, 120], period=2)
+        # out[2] = 110 - 100 = 10; out[3] = 120 - 105 = 15
+        out = momentum([100.0, 105.0, 110.0, 120.0], 2)
+        self.assertIsNone(out[0])
+        self.assertIsNone(out[1])
+        self.assertAlmostEqual(out[2], 10.0, places=10)
+        self.assertAlmostEqual(out[3], 15.0, places=10)
+
+    def test_output_length_matches_input(self):
+        out = momentum([1.0] * 20, 5)
+        self.assertEqual(len(out), 20)
+
+    def test_constant_input_zero(self):
+        out = momentum([5.0] * 10, 3)
+        for v in out[3:]:
+            self.assertAlmostEqual(v, 0.0, places=10)
+
+
+class TrueRangeTests(unittest.TestCase):
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            true_range([1.0, 2.0], [0.5], [1.0, 1.0])
+
+    def test_empty_input(self):
+        self.assertEqual(true_range([], [], []), [])
+
+    def test_first_bar_is_hl(self):
+        out = true_range([11.0], [9.0], [10.0])
+        self.assertAlmostEqual(out[0], 2.0, places=10)
+
+    def test_no_none_values(self):
+        h = [11.0] * 10; l = [9.0] * 10; c = [10.0] * 10
+        out = true_range(h, l, c)
+        self.assertTrue(all(v is not None for v in out))
+
+    def test_known_values(self):
+        # bar0: h=10, l=8 → TR=2
+        # bar1: h=12, l=9, prev_c=9 → TR=max(3, |12-9|=3, |9-9|=0)=3
+        h = [10.0, 12.0]; l = [8.0, 9.0]; c = [9.0, 11.0]
+        out = true_range(h, l, c)
+        self.assertAlmostEqual(out[0], 2.0, places=10)
+        self.assertAlmostEqual(out[1], 3.0, places=10)
+
+    def test_output_length_matches_input(self):
+        n = 15
+        h = [float(i + 1) for i in range(n)]
+        l = [float(i)     for i in range(n)]
+        c = [float(i) + 0.5 for i in range(n)]
+        out = true_range(h, l, c)
+        self.assertEqual(len(out), n)
+
+    def test_non_negative(self):
+        h = [10.0 + i * 0.1 for i in range(30)]
+        l = [9.0 + i * 0.1 for i in range(30)]
+        c = [9.5 + i * 0.1 for i in range(30)]
+        out = true_range(h, l, c)
+        for v in out:
+            self.assertGreaterEqual(v, 0.0)
+
+
+class WilderEmaTests(unittest.TestCase):
+    def test_invalid_period(self):
+        with self.assertRaises(ValueError):
+            wilder_ema([1.0, 2.0, 3.0], 0)
+
+    def test_insufficient_data_all_none(self):
+        out = wilder_ema([1.0, 2.0], 5)
+        self.assertEqual(out, [None, None])
+
+    def test_constant_input_stabilizes(self):
+        # On constant data the seed SMA = c, and Wilder EMA stays at c
+        val = 7.0
+        out = wilder_ema([val] * 20, 5)
+        for v in out[4:]:
+            self.assertAlmostEqual(v, val, places=10)
+
+    def test_slower_than_regular_ema(self):
+        # Wilder's alpha=1/p vs EMA alpha=2/(p+1); Wilder is slower to react
+        data = [100.0] * 20 + [200.0] * 20
+        w = wilder_ema(data, 10)
+        e = ema(data, 10)
+        # After the step, regular EMA catches up faster (higher value at index 29)
+        self.assertIsNotNone(w[29])
+        self.assertIsNotNone(e[29])
+        self.assertGreater(e[29], w[29])
+
+    def test_output_length_matches_input(self):
+        out = wilder_ema([1.0] * 20, 5)
+        self.assertEqual(len(out), 20)
+
+    def test_known_seed_value(self):
+        # With period=3, seed = SMA([1,2,3]) = 2.0 at index 2
+        out = wilder_ema([1.0, 2.0, 3.0, 4.0], 3)
+        self.assertIsNone(out[0])
+        self.assertIsNone(out[1])
+        self.assertAlmostEqual(out[2], 2.0, places=10)
+        # out[3] = 4.0*(1/3) + 2.0*(2/3) = 4/3 + 4/3 = 8/3
+        self.assertAlmostEqual(out[3], 4.0 / 3.0 + 2.0 * 2.0 / 3.0, places=10)
+
+
+class VwmaTests(unittest.TestCase):
+    def test_invalid_period(self):
+        with self.assertRaises(ValueError):
+            vwma([1.0, 2.0], [100.0, 200.0], 0)
+
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            vwma([1.0, 2.0], [100.0], 1)
+
+    def test_insufficient_data_all_none(self):
+        out = vwma([1.0, 2.0], [100.0, 200.0], 5)
+        self.assertEqual(out, [None, None])
+
+    def test_constant_price_returns_price(self):
+        out = vwma([5.0] * 10, [100.0] * 10, 3)
+        for v in out[2:]:
+            self.assertAlmostEqual(v, 5.0, places=10)
+
+    def test_known_value_period2(self):
+        # vwma([1,2], [100,200], period=2): pv = 1*100+2*200=500, v=300; VWMA=5/3
+        out = vwma([1.0, 2.0], [100.0, 200.0], 2)
+        self.assertIsNone(out[0])
+        self.assertAlmostEqual(out[1], 500.0 / 300.0, places=10)
+
+    def test_output_length_matches_input(self):
+        out = vwma([1.0] * 10, [100.0] * 10, 3)
+        self.assertEqual(len(out), 10)
+
+    def test_zero_volume_treated_as_one(self):
+        # Zero volume → treated as 1 for each bar
+        out = vwma([3.0, 4.0], [0.0, 0.0], 2)
+        # pv = 3*1 + 4*1 = 7; vsum=2; vwma = 3.5
+        self.assertAlmostEqual(out[1], 3.5, places=10)
+
+
+class HistVolTests(unittest.TestCase):
+    def test_invalid_period_zero(self):
+        with self.assertRaises(ValueError):
+            hist_vol([1.0, 2.0, 3.0], 0)
+
+    def test_invalid_period_one(self):
+        with self.assertRaises(ValueError):
+            hist_vol([1.0, 2.0, 3.0], 1)
+
+    def test_insufficient_data_all_none(self):
+        out = hist_vol([1.0, 2.0, 3.0], 5)
+        self.assertTrue(all(v is None for v in out))
+
+    def test_non_negative(self):
+        data = [100.0 * (1.001 ** i) for i in range(30)]
+        out = hist_vol(data, 10)
+        for v in out:
+            if v is not None:
+                self.assertGreaterEqual(v, 0.0)
+
+    def test_output_length_matches_input(self):
+        data = [100.0 + i for i in range(20)]
+        out = hist_vol(data, 5)
+        self.assertEqual(len(out), 20)
+
+    def test_constant_price_zero_vol(self):
+        # Constant prices → log returns all zero → hist_vol = 0
+        out = hist_vol([100.0] * 20, 5)
+        for v in out:
+            if v is not None:
+                self.assertAlmostEqual(v, 0.0, places=10)
+
+
+class CmfTests(unittest.TestCase):
+    def test_invalid_period(self):
+        with self.assertRaises(ValueError):
+            cmf([1.0], [0.5], [0.8], [100.0], period=0)
+
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            cmf([1.0, 2.0], [0.5], [0.8, 0.9], [100.0, 200.0], period=1)
+
+    def test_insufficient_data_all_none(self):
+        out = cmf([1.0] * 3, [0.5] * 3, [0.8] * 3, [100.0] * 3, period=20)
+        self.assertTrue(all(v is None for v in out))
+
+    def test_values_in_range(self):
+        # CMF values should be in [-1, 1]
+        import random; random.seed(11)
+        prices = [100.0]
+        for _ in range(49):
+            prices.append(prices[-1] + random.uniform(-1, 1))
+        h = [p + 1.0 for p in prices]
+        l = [p - 1.0 for p in prices]
+        vol = [1000.0] * 50
+        out = cmf(h, l, prices, vol, period=10)
+        for v in out:
+            if v is not None:
+                self.assertGreaterEqual(v, -1.0)
+                self.assertLessEqual(v, 1.0)
+
+    def test_known_value_period1_close_at_high(self):
+        # close==high, low=0: CLV = ((h-0)-(h-h))/h = 1; CMF = 1
+        out = cmf([10.0], [0.0], [10.0], [500.0], period=1)
+        self.assertAlmostEqual(out[0], 1.0, places=10)
+
+    def test_output_length_matches_input(self):
+        n = 25
+        h = [10.0] * n; l = [8.0] * n; c = [9.0] * n; v = [100.0] * n
+        out = cmf(h, l, c, v, period=10)
+        self.assertEqual(len(out), n)
+
+
+class AccDistTests(unittest.TestCase):
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            acc_dist([1.0, 2.0], [0.5], [0.8, 0.9], [100.0, 200.0])
+
+    def test_empty_input(self):
+        self.assertEqual(acc_dist([], [], [], []), [])
+
+    def test_no_none_values(self):
+        h = [11.0] * 5; l = [9.0] * 5; c = [10.0] * 5; v = [100.0] * 5
+        out = acc_dist(h, l, c, v)
+        self.assertTrue(all(isinstance(x, float) for x in out))
+
+    def test_known_single_bar(self):
+        # h=12, l=8, c=10: CLV = ((10-8)-(12-10))/(12-8) = 0; AD = 0
+        out = acc_dist([12.0], [8.0], [10.0], [100.0])
+        self.assertAlmostEqual(out[0], 0.0, places=10)
+
+    def test_close_at_high_accumulates(self):
+        # close==high, low=0: CLV=1; AD[0]=vol, AD[1]=2*vol, ...
+        out = acc_dist([10.0, 10.0, 10.0], [0.0, 0.0, 0.0], [10.0, 10.0, 10.0], [100.0] * 3)
+        self.assertAlmostEqual(out[0], 100.0, places=10)
+        self.assertAlmostEqual(out[1], 200.0, places=10)
+        self.assertAlmostEqual(out[2], 300.0, places=10)
+
+    def test_output_length_matches_input(self):
+        n = 10
+        out = acc_dist([10.0] * n, [8.0] * n, [9.0] * n, [100.0] * n)
+        self.assertEqual(len(out), n)
+
+
+class ForceIndexTests(unittest.TestCase):
+    def test_invalid_period(self):
+        with self.assertRaises(ValueError):
+            force_index([1.0, 2.0, 3.0], [100.0, 200.0, 300.0], period=0)
+
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            force_index([1.0, 2.0], [100.0], period=1)
+
+    def test_insufficient_data_raises(self):
+        with self.assertRaises(ValueError):
+            force_index([1.0], [100.0], period=1)
+
+    def test_insufficient_data_all_none_after_seed(self):
+        # Only 3 bars, period=10 → EMA can't seed
+        out = force_index([1.0, 2.0, 3.0], [100.0, 200.0, 300.0], period=10)
+        self.assertTrue(all(v is None for v in out))
+
+    def test_constant_price_zero_force(self):
+        # Constant prices → raw[i]=0 for i>0 → EMA of 0s = 0
+        c = [10.0] * 20; v = [1000.0] * 20
+        out = force_index(c, v, period=5)
+        for val in out:
+            if val is not None:
+                self.assertAlmostEqual(val, 0.0, places=10)
+
+    def test_output_length_matches_input(self):
+        c = [10.0] * 20; v = [1000.0] * 20
+        out = force_index(c, v, period=5)
+        self.assertEqual(len(out), 20)
+
+    def test_known_values(self):
+        # raw = [0, (2-1)*200=200, (3-2)*300=300]
+        # period=1: EMA with alpha=1 → EMA[i]=raw[i]
+        c = [1.0, 2.0, 3.0]; v = [100.0, 200.0, 300.0]
+        out = force_index(c, v, period=1)
+        # seed at index 0: seed = raw[0] = 0
+        self.assertAlmostEqual(out[0], 0.0, places=10)
+        self.assertAlmostEqual(out[1], 200.0, places=10)
+        self.assertAlmostEqual(out[2], 300.0, places=10)
+
+
+class VolOscTests(unittest.TestCase):
+    def test_invalid_fast(self):
+        with self.assertRaises(ValueError):
+            vol_osc([100.0] * 30, fast=0)
+
+    def test_invalid_slow(self):
+        with self.assertRaises(ValueError):
+            vol_osc([100.0] * 30, slow=-1)
+
+    def test_insufficient_data_all_none(self):
+        out = vol_osc([100.0] * 5, fast=14, slow=28)
+        self.assertTrue(all(v is None for v in out))
+
+    def test_output_length_matches_input(self):
+        out = vol_osc([1000.0] * 50, fast=5, slow=10)
+        self.assertEqual(len(out), 50)
+
+    def test_constant_volume_zero_osc(self):
+        # Constant volume → EMA fast == EMA slow → vol_osc = 0
+        out = vol_osc([1000.0] * 50, fast=5, slow=10)
+        for v in out:
+            if v is not None:
+                self.assertAlmostEqual(v, 0.0, places=8)
+
+    def test_rising_volume_positive_osc(self):
+        # Rising volume → fast EMA > slow EMA → positive oscillator
+        vols = [float(i + 1) for i in range(60)]
+        out = vol_osc(vols, fast=5, slow=20)
+        for v in out:
+            if v is not None:
+                self.assertGreater(v, -1e-9)  # should be >= 0 in uptrend
+
+
+class DonchianTests(unittest.TestCase):
+    def test_invalid_period(self):
+        with self.assertRaises(ValueError):
+            donchian([1.0, 2.0], [0.5, 1.0], period=0)
+
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            donchian([1.0, 2.0], [0.5], period=1)
+
+    def test_insufficient_data_all_none(self):
+        u, m, l = donchian([1.0, 2.0], [0.5, 1.0], period=5)
+        self.assertTrue(all(v is None for v in u))
+        self.assertTrue(all(v is None for v in m))
+        self.assertTrue(all(v is None for v in l))
+
+    def test_upper_ge_middle_ge_lower(self):
+        import random; random.seed(77)
+        prices = [100.0]
+        for _ in range(49):
+            prices.append(prices[-1] + random.uniform(-1, 1))
+        h = [p + 0.5 for p in prices]
+        l = [p - 0.5 for p in prices]
+        u, m, lo = donchian(h, l, period=10)
+        for i in range(len(h)):
+            if u[i] is not None:
+                self.assertGreaterEqual(u[i], m[i])
+                self.assertGreaterEqual(m[i], lo[i])
+
+    def test_known_values_period2(self):
+        # h=[10,12], l=[8,7], period=2
+        # i=1: upper=max(10,12)=12, lower=min(8,7)=7, middle=(12+7)/2=9.5
+        u, m, lo = donchian([10.0, 12.0], [8.0, 7.0], period=2)
+        self.assertIsNone(u[0])
+        self.assertAlmostEqual(u[1], 12.0, places=10)
+        self.assertAlmostEqual(lo[1], 7.0, places=10)
+        self.assertAlmostEqual(m[1], 9.5, places=10)
+
+    def test_output_lengths_match_input(self):
+        n = 30
+        h = [float(i + 1) for i in range(n)]
+        l = [float(i)     for i in range(n)]
+        u, m, lo = donchian(h, l, period=10)
+        self.assertEqual(len(u), n)
+        self.assertEqual(len(m), n)
+        self.assertEqual(len(lo), n)
+
+
+class PivotClassicTests(unittest.TestCase):
+    def test_known_values(self):
+        # h=110, l=90, c=105
+        # p=(110+90+105)/3=101.666...; r=20
+        # r1=2*p-90=113.333; s1=2*p-110=93.333
+        res = pivot_classic(110.0, 90.0, 105.0)
+        p = (110.0 + 90.0 + 105.0) / 3.0
+        self.assertAlmostEqual(res['p'],  p, places=10)
+        self.assertAlmostEqual(res['r1'], 2.0 * p - 90.0, places=10)
+        self.assertAlmostEqual(res['s1'], 2.0 * p - 110.0, places=10)
+        self.assertAlmostEqual(res['r2'], p + 20.0, places=10)
+        self.assertAlmostEqual(res['s2'], p - 20.0, places=10)
+        self.assertAlmostEqual(res['r3'], p + 40.0, places=10)
+        self.assertAlmostEqual(res['s3'], p - 40.0, places=10)
+
+    def test_r1_gt_p_gt_s1(self):
+        res = pivot_classic(110.0, 90.0, 100.0)
+        self.assertGreater(res['r1'], res['p'])
+        self.assertGreater(res['p'],  res['s1'])
+
+    def test_r3_gt_r2_gt_r1(self):
+        res = pivot_classic(115.0, 85.0, 100.0)
+        self.assertGreater(res['r3'], res['r2'])
+        self.assertGreater(res['r2'], res['r1'])
+
+    def test_s3_lt_s2_lt_s1(self):
+        res = pivot_classic(115.0, 85.0, 100.0)
+        self.assertLess(res['s3'], res['s2'])
+        self.assertLess(res['s2'], res['s1'])
+
+    def test_required_keys_present(self):
+        res = pivot_classic(110.0, 90.0, 100.0)
+        for k in ('p', 'r1', 's1', 'r2', 's2', 'r3', 's3'):
+            self.assertIn(k, res)
+
+
+class PivotFibonacciTests(unittest.TestCase):
+    def test_known_values(self):
+        h, l, c = 110.0, 90.0, 100.0
+        r = h - l  # 20
+        p = (h + l + c) / 3.0
+        res = pivot_fibonacci(h, l, c)
+        self.assertAlmostEqual(res['p'],  p, places=10)
+        self.assertAlmostEqual(res['r1'], p + r * 0.382, places=10)
+        self.assertAlmostEqual(res['r2'], p + r * 0.618, places=10)
+        self.assertAlmostEqual(res['r3'], p + r * 1.000, places=10)
+        self.assertAlmostEqual(res['s1'], p - r * 0.382, places=10)
+        self.assertAlmostEqual(res['s2'], p - r * 0.618, places=10)
+        self.assertAlmostEqual(res['s3'], p - r * 1.000, places=10)
+
+    def test_r1_gt_p_gt_s1(self):
+        res = pivot_fibonacci(110.0, 90.0, 100.0)
+        self.assertGreater(res['r1'], res['p'])
+        self.assertGreater(res['p'],  res['s1'])
+
+    def test_required_keys_present(self):
+        res = pivot_fibonacci(110.0, 90.0, 100.0)
+        for k in ('p', 'r1', 's1', 'r2', 's2', 'r3', 's3'):
+            self.assertIn(k, res)
+
+
+class PivotCamarillaTests(unittest.TestCase):
+    def test_known_values(self):
+        h, l, c = 110.0, 90.0, 100.0
+        r = h - l  # 20
+        res = pivot_camarilla(h, l, c)
+        self.assertAlmostEqual(res['r1'], c + r * 1.1 / 12.0, places=10)
+        self.assertAlmostEqual(res['r2'], c + r * 1.1 / 6.0,  places=10)
+        self.assertAlmostEqual(res['r3'], c + r * 1.1 / 4.0,  places=10)
+        self.assertAlmostEqual(res['r4'], c + r * 1.1 / 2.0,  places=10)
+        self.assertAlmostEqual(res['s1'], c - r * 1.1 / 12.0, places=10)
+        self.assertAlmostEqual(res['s2'], c - r * 1.1 / 6.0,  places=10)
+        self.assertAlmostEqual(res['s3'], c - r * 1.1 / 4.0,  places=10)
+        self.assertAlmostEqual(res['s4'], c - r * 1.1 / 2.0,  places=10)
+
+    def test_r1_gt_p_gt_s1(self):
+        res = pivot_camarilla(110.0, 90.0, 100.0)
+        self.assertGreater(res['r1'], res['p'])
+        self.assertGreater(res['p'],  res['s1'])
+
+    def test_required_keys_present(self):
+        res = pivot_camarilla(110.0, 90.0, 100.0)
+        for k in ('p', 'r1', 's1', 'r2', 's2', 'r3', 's3'):
+            self.assertIn(k, res)
+
+
+class FibonacciTests(unittest.TestCase):
+    def test_returns_7_levels(self):
+        levels = fibonacci(110.0, 90.0)
+        self.assertEqual(len(levels), 7)
+
+    def test_uptrend_levels(self):
+        # uptrend: level[i] = swing_high - F[i] * (swing_high - swing_low)
+        _FIBS = [0.0, 0.236, 0.382, 0.500, 0.618, 0.786, 1.000]
+        sh, sl = 110.0, 90.0
+        r = sh - sl
+        levels = fibonacci(sh, sl, uptrend=True)
+        for i, f in enumerate(_FIBS):
+            self.assertAlmostEqual(levels[i], sh - f * r, places=10)
+
+    def test_downtrend_levels(self):
+        _FIBS = [0.0, 0.236, 0.382, 0.500, 0.618, 0.786, 1.000]
+        sh, sl = 110.0, 90.0
+        r = sh - sl
+        levels = fibonacci(sh, sl, uptrend=False)
+        for i, f in enumerate(_FIBS):
+            self.assertAlmostEqual(levels[i], sl + f * r, places=10)
+
+    def test_level0_is_swing_high_uptrend(self):
+        levels = fibonacci(110.0, 90.0, uptrend=True)
+        self.assertAlmostEqual(levels[0], 110.0, places=10)
+
+    def test_level6_is_swing_low_uptrend(self):
+        levels = fibonacci(110.0, 90.0, uptrend=True)
+        self.assertAlmostEqual(levels[6], 90.0, places=10)
+
+    def test_monotone_descending_uptrend(self):
+        levels = fibonacci(110.0, 90.0, uptrend=True)
+        for i in range(1, len(levels)):
+            self.assertLessEqual(levels[i], levels[i - 1] + 1e-12)
+
+
+class SarTests(unittest.TestCase):
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            sar([1.0, 2.0], [0.5])
+
+    def test_too_few_bars(self):
+        with self.assertRaises(ValueError):
+            sar([1.0], [0.5])
+
+    def test_output_lengths_match_input(self):
+        h = [10.0 + i * 0.1 for i in range(50)]
+        l = [9.0 + i * 0.1 for i in range(50)]
+        s, b = sar(h, l)
+        self.assertEqual(len(s), 50)
+        self.assertEqual(len(b), 50)
+
+    def test_initial_bar_is_bullish(self):
+        h = [10.0, 11.0]; l = [9.0, 9.5]
+        s, b = sar(h, l)
+        self.assertAlmostEqual(b[0], 1.0, places=10)
+        self.assertAlmostEqual(s[0], l[0], places=10)
+
+    def test_bull_flag_is_zero_or_one(self):
+        import random; random.seed(42)
+        prices = [100.0]
+        for _ in range(99):
+            prices.append(prices[-1] + random.uniform(-1, 1))
+        h = [p + 0.5 for p in prices]
+        l = [p - 0.5 for p in prices]
+        s, b = sar(h, l)
+        for v in b:
+            if v is not None:
+                self.assertIn(v, (0.0, 1.0))
+
+    def test_no_none_values(self):
+        h = [10.0 + i * 0.05 for i in range(30)]
+        l = [9.0 + i * 0.05 for i in range(30)]
+        s, b = sar(h, l)
+        for v in s:
+            self.assertIsNotNone(v)
+        for v in b:
+            self.assertIsNotNone(v)
+
+
+class IchimokuTests(unittest.TestCase):
+    def test_mismatched_lengths(self):
+        with self.assertRaises(ValueError):
+            ichimoku([1.0, 2.0], [0.5], [0.8, 0.9])
+
+    def test_invalid_tenkan(self):
+        with self.assertRaises(ValueError):
+            ichimoku([1.0] * 30, [0.5] * 30, [0.8] * 30, tenkan=0)
+
+    def test_invalid_kijun(self):
+        with self.assertRaises(ValueError):
+            ichimoku([1.0] * 30, [0.5] * 30, [0.8] * 30, kijun=0)
+
+    def test_output_lengths_match_input(self):
+        n = 60
+        h = [10.0] * n; l = [9.0] * n; c = [9.5] * n
+        t, k, sa, sb, ch = ichimoku(h, l, c, tenkan=9, kijun=26, senkou_b=52)
+        self.assertEqual(len(t),  n)
+        self.assertEqual(len(k),  n)
+        self.assertEqual(len(sa), n)
+        self.assertEqual(len(sb), n)
+        self.assertEqual(len(ch), n)
+
+    def test_tenkan_defined_from_correct_index(self):
+        n = 30
+        h = [10.0 + i * 0.1 for i in range(n)]
+        l = [9.0 + i * 0.1  for i in range(n)]
+        c = [9.5 + i * 0.1  for i in range(n)]
+        t, _, _, _, _ = ichimoku(h, l, c, tenkan=9, kijun=26, senkou_b=52)
+        # Tenkan defined from index tenkan-1=8
+        self.assertIsNone(t[7])
+        self.assertIsNotNone(t[8])
+
+    def test_kijun_defined_from_correct_index(self):
+        n = 60
+        h = [10.0 + i * 0.1 for i in range(n)]
+        l = [9.0 + i * 0.1  for i in range(n)]
+        c = [9.5 + i * 0.1  for i in range(n)]
+        _, k, _, _, _ = ichimoku(h, l, c, tenkan=9, kijun=26, senkou_b=52)
+        self.assertIsNone(k[24])
+        self.assertIsNotNone(k[25])
+
+    def test_constant_input_tenkan_equals_price(self):
+        # h==l==c==const → tenkan = const
+        val = 10.0
+        h = [val] * 30; l = [val] * 30; c = [val] * 30
+        t, k, sa, sb, ch = ichimoku(h, l, c, tenkan=5, kijun=10, senkou_b=20)
+        for v in t:
+            if v is not None:
+                self.assertAlmostEqual(v, val, places=10)
+
+    def test_insufficient_data_all_none(self):
+        n = 3
+        h = [10.0] * n; l = [9.0] * n; c = [9.5] * n
+        t, k, sa, sb, ch = ichimoku(h, l, c, tenkan=9, kijun=26, senkou_b=52)
+        self.assertTrue(all(v is None for v in t))
+        self.assertTrue(all(v is None for v in k))
 
 
 if __name__ == "__main__":

@@ -539,6 +539,426 @@ function emaOfSparse(values, period) {
     return out;
 }
 
+// ── Momentum ──────────────────────────────────────────────────────────────────
+// out[i] = src[i] - src[i-period]. First valid index: period (n <= period guard).
+// Matches cpp/ af_momentum.
+export function momentum(values, period) {
+    checkPeriod(period);
+    const n = values.length;
+    const out = new Array(n).fill(null);
+    if (n <= period) return out;
+    for (let i = period; i < n; i++) {
+        out[i] = values[i] - values[i - period];
+    }
+    return out;
+}
+
+// ── True Range ────────────────────────────────────────────────────────────────
+// tr[0] = high[0] - low[0]; tr[i] = max(H-L, |H-prevC|, |L-prevC|).
+// Matches cpp/ af_true_range.
+export function trueRange(highs, lows, closes) {
+    const n = highs.length;
+    if (lows.length !== n || closes.length !== n) {
+        throw new Error("highs, lows, closes must all have the same length");
+    }
+    const out = new Array(n);
+    if (n === 0) return out;
+    out[0] = highs[0] - lows[0];
+    for (let i = 1; i < n; i++) {
+        const pc = closes[i - 1];
+        out[i] = Math.max(
+            highs[i] - lows[i],
+            Math.abs(highs[i] - pc),
+            Math.abs(lows[i]  - pc),
+        );
+    }
+    return out;
+}
+
+// ── Wilder EMA ────────────────────────────────────────────────────────────────
+// Wilder smoothing: alpha = 1/period (matches cpp/ af_wilder_ema).
+// Seed = average of first `period` values; then out[i] = src[i]*a + out[i-1]*(1-a).
+export function wilderEma(values, period) {
+    checkPeriod(period);
+    const n = values.length;
+    const out = new Array(n).fill(null);
+    if (n < period) return out;
+
+    const alpha = 1.0 / period;
+    let seed = 0;
+    for (let i = 0; i < period; i++) seed += values[i];
+    seed /= period;
+    out[period - 1] = seed;
+    let prev = seed;
+    for (let i = period; i < n; i++) {
+        prev = values[i] * alpha + prev * (1 - alpha);
+        out[i] = prev;
+    }
+    return out;
+}
+
+// ── VWMA (Volume Weighted Moving Average) ─────────────────────────────────────
+// Sum(price*vol) / Sum(vol) over period. vol<=0 treated as 1. Matches cpp/ af_vwma.
+export function vwma(values, volumes, period) {
+    checkPeriod(period);
+    const n = values.length;
+    if (volumes.length !== n) {
+        throw new Error("values and volumes must have the same length");
+    }
+    const out = new Array(n).fill(null);
+    if (n < period) return out;
+
+    const EPSILON = 1e-10;
+    for (let i = period - 1; i < n; i++) {
+        let pv = 0, v = 0;
+        for (let j = 0; j < period; j++) {
+            let vv = volumes[i - j];
+            if (vv <= 0) vv = 1;
+            pv += values[i - j] * vv;
+            v  += vv;
+        }
+        out[i] = v > EPSILON ? pv / v : values[i];
+    }
+    return out;
+}
+
+// ── Historical Volatility ─────────────────────────────────────────────────────
+// Annualized std-dev of log returns (sample std, period-1 denominator).
+// tdays defaults to 252 (trading days per year), matching cpp/ af_hist_vol.
+// First valid index: period (guard n <= period).
+export function histVol(values, period, tdays = 252) {
+    checkPeriod(period);
+    if (!Number.isInteger(period) || period < 2) {
+        throw new Error(`histVol period must be an integer >= 2, got ${period}`);
+    }
+    const n = values.length;
+    const out = new Array(n).fill(null);
+    if (n <= period) return out;
+
+    const EPSILON = 1e-10;
+    for (let i = period; i < n; i++) {
+        let mean = 0;
+        for (let j = 0; j < period; j++) {
+            const p = values[i - 1 - j];
+            if (p > EPSILON) mean += Math.log(values[i - j] / p);
+        }
+        mean /= period;
+        let variance = 0;
+        for (let j = 0; j < period; j++) {
+            const p = values[i - 1 - j];
+            if (p > EPSILON) {
+                const r = Math.log(values[i - j] / p) - mean;
+                variance += r * r;
+            }
+        }
+        const sd = Math.sqrt(variance / (period - 1));
+        out[i] = sd * Math.sqrt(tdays) * 100.0;
+    }
+    return out;
+}
+
+// ── CMF (Chaikin Money Flow) ──────────────────────────────────────────────────
+// CLV = ((C-L)-(H-C))/(H-L); CMF = sum(CLV*V) / sum(V) over period.
+// Matches cpp/ af_cmf.
+export function cmf(highs, lows, closes, volumes, period = 20) {
+    checkPeriod(period);
+    const n = highs.length;
+    if (lows.length !== n || closes.length !== n || volumes.length !== n) {
+        throw new Error("highs, lows, closes, volumes must all have the same length");
+    }
+    const out = new Array(n).fill(null);
+    if (n < period) return out;
+
+    const EPSILON = 1e-10;
+    for (let i = period - 1; i < n; i++) {
+        let mfvs = 0, vs = 0;
+        for (let j = 0; j < period; j++) {
+            const r = highs[i - j] - lows[i - j];
+            const clv = r > EPSILON
+                ? ((closes[i - j] - lows[i - j]) - (highs[i - j] - closes[i - j])) / r
+                : 0;
+            mfvs += clv * volumes[i - j];
+            vs   += volumes[i - j];
+        }
+        out[i] = vs > EPSILON ? mfvs / vs : 0;
+    }
+    return out;
+}
+
+// ── Accumulation/Distribution ─────────────────────────────────────────────────
+// out[0] = 0; out[i] = out[i-1] + CLV * volume.
+// Matches cpp/ af_acc_dist.
+export function accDist(highs, lows, closes, volumes) {
+    const n = highs.length;
+    if (lows.length !== n || closes.length !== n || volumes.length !== n) {
+        throw new Error("highs, lows, closes, volumes must all have the same length");
+    }
+    const out = new Array(n);
+    if (n === 0) return out;
+
+    const EPSILON = 1e-10;
+    for (let i = 0; i < n; i++) {
+        const r = highs[i] - lows[i];
+        const clv = r > EPSILON
+            ? ((closes[i] - lows[i]) - (highs[i] - closes[i])) / r
+            : 0;
+        out[i] = (i === 0 ? 0 : out[i - 1]) + clv * volumes[i];
+    }
+    return out;
+}
+
+// ── Force Index ───────────────────────────────────────────────────────────────
+// raw[0]=0; raw[i] = (close[i] - close[i-1]) * volume[i]; then EMA(raw, period).
+// Matches cpp/ af_force_index.
+export function forceIndex(closes, volumes, period = 13) {
+    checkPeriod(period);
+    const n = closes.length;
+    if (volumes.length !== n) {
+        throw new Error("closes and volumes must have the same length");
+    }
+    const raw = new Array(n);
+    raw[0] = 0;
+    for (let i = 1; i < n; i++) {
+        raw[i] = (closes[i] - closes[i - 1]) * volumes[i];
+    }
+    return ema(raw, period);
+}
+
+// ── Volume Oscillator ─────────────────────────────────────────────────────────
+// (EMA(vol, fast) - EMA(vol, slow)) / EMA(vol, slow) * 100.
+// Null when slow EMA is null or ~0. Matches cpp/ af_vol_osc.
+export function volOsc(volumes, fast = 14, slow = 28) {
+    checkPeriod(fast);
+    checkPeriod(slow);
+    const n = volumes.length;
+    const ef = ema(volumes, fast);
+    const es = ema(volumes, slow);
+    const out = new Array(n).fill(null);
+    const EPSILON = 1e-10;
+    for (let i = 0; i < n; i++) {
+        if (ef[i] !== null && es[i] !== null && Math.abs(es[i]) > EPSILON) {
+            out[i] = (ef[i] - es[i]) / es[i] * 100.0;
+        }
+    }
+    return out;
+}
+
+// ── Donchian Channel ──────────────────────────────────────────────────────────
+// upper = max(high, period); lower = min(low, period); middle = (upper+lower)/2.
+// Matches cpp/ af_donchian.
+export function donchian(highs, lows, period = 20) {
+    checkPeriod(period);
+    const n = highs.length;
+    if (lows.length !== n) {
+        throw new Error("highs and lows must have the same length");
+    }
+    const upper  = new Array(n).fill(null);
+    const middle = new Array(n).fill(null);
+    const lower  = new Array(n).fill(null);
+    if (n < period) return { upper, middle, lower };
+
+    for (let i = period - 1; i < n; i++) {
+        let hi = highs[i], lo = lows[i];
+        for (let j = 1; j < period; j++) {
+            if (highs[i - j] > hi) hi = highs[i - j];
+            if (lows[i - j]  < lo) lo = lows[i - j];
+        }
+        upper[i]  = hi;
+        lower[i]  = lo;
+        middle[i] = (hi + lo) * 0.5;
+    }
+    return { upper, middle, lower };
+}
+
+// ── Pivot Points (Classic) ────────────────────────────────────────────────────
+// p = (H+L+C)/3; r1=2p-L; r2=p+(H-L); r3=p+2(H-L); s1=2p-H; s2=p-(H-L); s3=p-2(H-L).
+// Matches cpp/ af_pivot_classic.
+export function pivotClassic(high, low, close) {
+    const p  = (high + low + close) / 3.0;
+    const hl = high - low;
+    return {
+        p,
+        r1: 2.0 * p - low,
+        r2: p + hl,
+        r3: p + 2.0 * hl,
+        s1: 2.0 * p - high,
+        s2: p - hl,
+        s3: p - 2.0 * hl,
+    };
+}
+
+// ── Pivot Points (Fibonacci) ──────────────────────────────────────────────────
+// r1=p+r*0.382; r2=p+r*0.618; r3=p+r*1.000; s1..s3 mirror. Matches cpp/ af_pivot_fibonacci.
+export function pivotFibonacci(high, low, close) {
+    const p = (high + low + close) / 3.0;
+    const r = high - low;
+    return {
+        p,
+        r1: p + r * 0.382,
+        r2: p + r * 0.618,
+        r3: p + r * 1.000,
+        s1: p - r * 0.382,
+        s2: p - r * 0.618,
+        s3: p - r * 1.000,
+    };
+}
+
+// ── Pivot Points (Camarilla) ──────────────────────────────────────────────────
+// r4=c+r*1.1/2; r3=c+r*1.1/4; r2=c+r*1.1/6; r1=c+r*1.1/12; s mirrored.
+// Returns { r4, r3, r2, r1, s1, s2, s3, s4 }. Matches cpp/ af_pivot_camarilla.
+export function pivotCamarilla(high, low, close) {
+    const r = high - low;
+    return {
+        r4: close + r * 1.1 / 2.0,
+        r3: close + r * 1.1 / 4.0,
+        r2: close + r * 1.1 / 6.0,
+        r1: close + r * 1.1 / 12.0,
+        s1: close - r * 1.1 / 12.0,
+        s2: close - r * 1.1 / 6.0,
+        s3: close - r * 1.1 / 4.0,
+        s4: close - r * 1.1 / 2.0,
+    };
+}
+
+// ── Fibonacci Retracement ─────────────────────────────────────────────────────
+// Levels at 0%, 23.6%, 38.2%, 50%, 61.8%, 78.6%, 100%.
+// The JS API mirrors af_fibonacci with uptrend=true (default; swingHigh is the top).
+// Returns 7 levels: level[i] = swingHigh - F[i] * (swingHigh - swingLow).
+// Matches cpp/ af_fibonacci with up=true.
+export function fibonacci(swingHigh, swingLow) {
+    const F = [0.0, 0.236, 0.382, 0.500, 0.618, 0.786, 1.000];
+    const r = swingHigh - swingLow;
+    return F.map(f => swingHigh - f * r);
+}
+
+// ── SAR (Parabolic Stop and Reverse) ─────────────────────────────────────────
+// Matches cpp/ af_sar exactly. Returns { sar: Array<number|null>, isBullish: Array<number|null> }.
+// sar[0] = lows[0], isBullish[0] = 1.0; then iterates forward.
+// isBullish uses 1.0 / 0.0 flags.
+export function sar(highs, lows, start = 0.02, step = 0.02, maxAf = 0.2) {
+    const n = highs.length;
+    if (lows.length !== n) {
+        throw new Error("highs and lows must have the same length");
+    }
+    const sarArr      = new Array(n).fill(null);
+    const isBullish   = new Array(n).fill(null);
+    if (n < 2) return { sar: sarArr, isBullish: isBullish };
+
+    sarArr[0]    = lows[0];
+    isBullish[0] = 1.0;
+    let ep    = highs[0];
+    let accel = start;
+
+    for (let i = 1; i < n; i++) {
+        const bull = isBullish[i - 1] > 0.5;
+        let sarVal, nep = ep;
+
+        if (bull) {
+            sarVal = sarArr[i - 1] + accel * (ep - sarArr[i - 1]);
+            sarVal = Math.min(sarVal, Math.min(lows[i - 1], i >= 2 ? lows[i - 2] : lows[i - 1]));
+            if (lows[i] < sarVal) {
+                sarVal = ep; nep = lows[i]; accel = start;
+                isBullish[i] = 0.0;
+            } else {
+                if (highs[i] > ep) { nep = highs[i]; accel = Math.min(accel + step, maxAf); }
+                isBullish[i] = 1.0;
+            }
+        } else {
+            sarVal = sarArr[i - 1] - accel * (sarArr[i - 1] - ep);
+            sarVal = Math.max(sarVal, Math.max(highs[i - 1], i >= 2 ? highs[i - 2] : highs[i - 1]));
+            if (highs[i] > sarVal) {
+                sarVal = ep; nep = highs[i]; accel = start;
+                isBullish[i] = 1.0;
+            } else {
+                if (lows[i] < ep) { nep = lows[i]; accel = Math.min(accel + step, maxAf); }
+                isBullish[i] = 0.0;
+            }
+        }
+        ep = nep;
+        sarArr[i] = sarVal;
+    }
+    return { sar: sarArr, isBullish };
+}
+
+// ── Ichimoku Cloud ────────────────────────────────────────────────────────────
+// tenkan = (max(H,t) + min(L,t)) / 2 for tenkan bars.
+// kijun  = (max(H,k) + min(L,k)) / 2 for kijun bars.
+// senkouA[i+kijun] = (tenkan[i] + kijun[i]) / 2   (shifted forward by kijun).
+// senkouB[i+kijun] = (max(H,sb) + min(L,sb)) / 2  (shifted forward by kijun).
+// chikou[i-kijun]  = close[i]                      (shifted backward by kijun).
+// The cpp/ uses shift=kijun for all displacements. All nulls where undefined.
+// Matches cpp/ af_ichimoku with shift=kijun.
+export function ichimoku(highs, lows, closes, tenkan = 9, kijun = 26, senkouB = 52) {
+    checkPeriod(tenkan);
+    checkPeriod(kijun);
+    checkPeriod(senkouB);
+    const n = highs.length;
+    if (lows.length !== n || closes.length !== n) {
+        throw new Error("highs, lows, closes must all have the same length");
+    }
+
+    const tenkanArr  = new Array(n).fill(null);
+    const kijunArr   = new Array(n).fill(null);
+    const senkouAArr = new Array(n).fill(null);
+    const senkouBArr = new Array(n).fill(null);
+    const chikouArr  = new Array(n).fill(null);
+
+    const shift = kijun;
+
+    for (let i = 0; i < n; i++) {
+        // Tenkan-sen
+        if (i >= tenkan - 1) {
+            let hi = highs[i], lo = lows[i];
+            for (let j = 1; j < tenkan; j++) {
+                if (highs[i - j] > hi) hi = highs[i - j];
+                if (lows[i - j]  < lo) lo = lows[i - j];
+            }
+            tenkanArr[i] = (hi + lo) / 2.0;
+        }
+        // Kijun-sen
+        if (i >= kijun - 1) {
+            let hi = highs[i], lo = lows[i];
+            for (let j = 1; j < kijun; j++) {
+                if (highs[i - j] > hi) hi = highs[i - j];
+                if (lows[i - j]  < lo) lo = lows[i - j];
+            }
+            kijunArr[i] = (hi + lo) / 2.0;
+        }
+    }
+
+    // Senkou A: (tenkan + kijun) / 2, shifted forward by shift
+    for (let i = 0; i + shift < n; i++) {
+        if (tenkanArr[i] !== null && kijunArr[i] !== null) {
+            senkouAArr[i + shift] = (tenkanArr[i] + kijunArr[i]) / 2.0;
+        }
+    }
+
+    // Senkou B: (max H + min L over senkouB bars), shifted forward by shift
+    for (let i = 0; i < n; i++) {
+        if (i < senkouB - 1) continue;
+        let hi = highs[i], lo = lows[i];
+        for (let j = 1; j < senkouB; j++) {
+            if (highs[i - j] > hi) hi = highs[i - j];
+            if (lows[i - j]  < lo) lo = lows[i - j];
+        }
+        const dst = i + shift;
+        if (dst < n) senkouBArr[dst] = (hi + lo) / 2.0;
+    }
+
+    // Chikou span: close[i] shifted back by shift → chikou[i-shift] = close[i]
+    for (let i = shift; i < n; i++) {
+        chikouArr[i - shift] = closes[i];
+    }
+
+    return {
+        tenkan:  tenkanArr,
+        kijun:   kijunArr,
+        senkouA: senkouAArr,
+        senkouB: senkouBArr,
+        chikou:  chikouArr,
+    };
+}
+
 // ── ADX (Average Directional Index) ──────────────────────────────────────────
 // Wilder smoothing (alpha = 1/period) over TR, +DM, -DM.
 // Requires n >= 2*period + 1 (matching cpp/ af_adx guard).
