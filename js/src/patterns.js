@@ -216,6 +216,89 @@ export function isDescendingTriangle(bars) {
     return 0;
 }
 
+// ── Bullish Flag ──────────────────────────────────────────────────────────────
+// Pole: strong bullish move in first 10 bars (bars[n-20..n-11]).
+// Flag: tight consolidation in last 10 bars (bars[n-10..n-1]).
+// flag_rng < pole_rng * 0.45 and pole_rng > pole_lo * 0.01.
+// Matches cpp/ BullishFlag.
+export function isBullishFlag(bars) {
+    const n = bars.length;
+    if (n < 20) return 0;
+    const poleLo  = minRange(bars, n - 20, n - 11);
+    const poleHi  = maxRange(bars, n - 20, n - 11);
+    const poleRng = poleHi - poleLo;
+    const flagHi  = maxRange(bars, n - 10, n - 1);
+    const flagLo  = minRange(bars, n - 10, n - 1);
+    const flagRng = flagHi - flagLo;
+    const poleBull  = bars[n - 11].close > bars[n - 20].close;
+    const tightFlag = flagRng < poleRng * 0.45;
+    if (poleBull && tightFlag && poleRng > poleLo * 0.01) return 1;
+    return 0;
+}
+
+// ── Bearish Flag ──────────────────────────────────────────────────────────────
+// Pole: strong bearish move in first 10 bars (bars[n-20..n-11]).
+// Flag: tight consolidation in last 10 bars (bars[n-10..n-1]).
+// Matches cpp/ BearishFlag.
+export function isBearishFlag(bars) {
+    const n = bars.length;
+    if (n < 20) return 0;
+    const poleLo  = minRange(bars, n - 20, n - 11);
+    const poleHi  = maxRange(bars, n - 20, n - 11);
+    const poleRng = poleHi - poleLo;
+    const flagRng = maxRange(bars, n - 10, n - 1) - minRange(bars, n - 10, n - 1);
+    const poleBear  = bars[n - 11].close < bars[n - 20].close;
+    const tightFlag = flagRng < poleRng * 0.45;
+    if (poleBear && tightFlag && poleRng > poleLo * 0.01) return -1;
+    return 0;
+}
+
+// ── Head and Shoulders ────────────────────────────────────────────────────────
+// Bearish reversal. Left shoulder, head (higher), right shoulder (similar to left).
+// Neckline = min of lows of left-shoulder and right-shoulder regions.
+// Close below neckline confirms. Matches cpp/ HeadAndShoulders.
+export function isHeadAndShoulders(bars) {
+    const n = bars.length;
+    if (n < 40) return 0;
+    const s  = n - 40;
+    const ls = maxRange(bars, s,      s + 12);
+    const h  = maxRange(bars, s + 13, s + 26);
+    const rs = maxRange(bars, s + 27, n - 1);
+    const neckline = Math.min(
+        minRange(bars, s, s + 12),
+        minRange(bars, s + 27, n - 1)
+    );
+    if (h > ls * 1.01 && h > rs * 1.01 &&
+        Math.abs(ls - rs) / (ls + rs) * 2 < 0.07 &&
+        bars[n - 1].close < neckline) {
+        return -1;
+    }
+    return 0;
+}
+
+// ── Inverse Head and Shoulders ────────────────────────────────────────────────
+// Bullish reversal. Left shoulder, head (lower), right shoulder (similar to left).
+// Neckline = max of highs of left-shoulder and right-shoulder regions.
+// Close above neckline confirms. Matches cpp/ InverseHeadAndShoulders.
+export function isInverseHeadAndShoulders(bars) {
+    const n = bars.length;
+    if (n < 40) return 0;
+    const s  = n - 40;
+    const ls = minRange(bars, s,      s + 12);
+    const h  = minRange(bars, s + 13, s + 26);
+    const rs = minRange(bars, s + 27, n - 1);
+    const neckline = Math.max(
+        maxRange(bars, s, s + 12),
+        maxRange(bars, s + 27, n - 1)
+    );
+    if (h < ls * 0.99 && h < rs * 0.99 &&
+        Math.abs(ls - rs) / (ls + rs) * 2 < 0.07 &&
+        bars[n - 1].close > neckline) {
+        return 1;
+    }
+    return 0;
+}
+
 export class PatternMatch {
     constructor(barIndex, name, signal) {
         this.barIndex = barIndex;
@@ -265,6 +348,13 @@ export function scanPatterns(bars) {
         let s;
         if ((s = isAscendingTriangle(bars)))  out.push(new PatternMatch(last, "ascending_triangle",  s));
         if ((s = isDescendingTriangle(bars))) out.push(new PatternMatch(last, "descending_triangle", s));
+        if ((s = isBullishFlag(bars)))        out.push(new PatternMatch(last, "bullish_flag",        s));
+        if ((s = isBearishFlag(bars)))        out.push(new PatternMatch(last, "bearish_flag",        s));
+    }
+    if (bars.length >= 40) {
+        let s;
+        if ((s = isHeadAndShoulders(bars)))        out.push(new PatternMatch(last, "head_and_shoulders",         s));
+        if ((s = isInverseHeadAndShoulders(bars))) out.push(new PatternMatch(last, "inverse_head_and_shoulders", s));
     }
     return out;
 }

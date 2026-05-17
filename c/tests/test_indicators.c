@@ -767,6 +767,192 @@ static void test_keltner_nan_prefix(void) {
     CHK(!is_nan(lo[29]));
 }
 
+/* ── HMA ───────────────────────────────────────────────────────────────── */
+static void test_hma_invalid_args(void) {
+    double out[4]; double in[] = {1,2,3,4};
+    CHK(af_hma(NULL, 4, 4, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_hma(in,   4, 4, NULL) == AF_ERR_INVALID_PARAM);
+    /* period < 2 is invalid per cpp/ GUARD(period>=2) */
+    CHK(af_hma(in,   4, 0, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_hma(in,   4, 1, out) == AF_ERR_INVALID_PARAM);
+}
+
+static void test_hma_insufficient_data(void) {
+    /* period=16: half=2, sq=4; need at least sq bars after raw is built.
+       Use n=2 which is far too small. */
+    double out[2]; double in[] = {1.0, 2.0};
+    af_error_t rc = af_hma(in, 2, 16, out);
+    /* The inner WMA calls will propagate NaN or return AF_ERR_IO;
+       output array must be all NaN regardless. */
+    CHK(is_nan(out[0]) && is_nan(out[1]));
+    (void)rc;
+}
+
+static void test_hma_constant_input(void) {
+    /* HMA of a constant series should stabilise at that constant. */
+    double out[50]; double in[50];
+    for (int i = 0; i < 50; ++i) in[i] = 7.0;
+    CHK(af_hma(in, 50, 9, out) == AF_OK);
+    /* Last few values should equal 7.0 once warm. */
+    CHK_NEAR(out[49], 7.0, 1e-9);
+}
+
+static void test_hma_known_period4(void) {
+    /* period=4: half=(int)sqrt(2.0)=1, sq=(int)sqrt(4.0)=2.
+       WMA(1) = identity, WMA(4) uses 4 bars.
+       raw = 2*WMA(1) - WMA(4) = 2*src - WMA(4)
+       out = WMA(raw, 2) — verify output is finite and NaN-prefixed at [0]. */
+    double in[] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
+    double out[6];
+    CHK(af_hma(in, 6, 4, out) == AF_OK);
+    /* WMA(4)[3] = (1*1+2*2+3*3+4*4)/10 = (1+4+9+16)/10 = 3.0
+       raw[3] = 2*4 - 3.0 = 5.0
+       WMA(1)[i] = src[i]; raw[i] = 2*src[i] - WMA(4)[i]
+       WMA(4)[4] = (1*2+2*3+3*4+4*5)/10 = (2+6+12+20)/10=4.0; raw[4]=2*5-4.0=6.0
+       out = WMA(raw,2); first valid at index 4 (raw[3] and raw[4] both valid).
+       WMA(2)[4] = (1*raw[3]+2*raw[4])/3 = (5+12)/3 = 17/3 ≈ 5.6667 */
+    CHK(is_nan(out[0]));
+    CHK(!is_nan(out[4]));
+    CHK_NEAR(out[4], 17.0/3.0, 1e-9);
+}
+
+/* ── DEMA ──────────────────────────────────────────────────────────────── */
+static void test_dema_invalid_args(void) {
+    double out[4]; double in[] = {1,2,3,4};
+    CHK(af_dema(NULL, 4, 2, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_dema(in,   4, 2, NULL) == AF_ERR_INVALID_PARAM);
+    CHK(af_dema(in,   4, 0, out) == AF_ERR_INVALID_PARAM);
+}
+
+static void test_dema_insufficient_data(void) {
+    double out[2]; double in[] = {1.0, 2.0};
+    CHK(af_dema(in, 2, 5, out) == AF_OK); /* runs but all NaN */
+    CHK(is_nan(out[0]) && is_nan(out[1]));
+}
+
+static void test_dema_constant_input(void) {
+    /* DEMA of a constant series must equal that constant. */
+    double out[40]; double in[40];
+    for (int i = 0; i < 40; ++i) in[i] = 5.0;
+    CHK(af_dema(in, 40, 5, out) == AF_OK);
+    /* Once both EMA passes have warmed up (index >= 2*(period-1) = 8). */
+    CHK_NEAR(out[39], 5.0, 1e-9);
+}
+
+static void test_dema_nan_prefix(void) {
+    /* With period=5: EMA1 starts at index 4, EMA2 starts at index 8.
+       DEMA should be NaN for the first 8 indices. */
+    double out[20]; double in[20];
+    for (int i = 0; i < 20; ++i) in[i] = 100.0 + i;
+    CHK(af_dema(in, 20, 5, out) == AF_OK);
+    for (int i = 0; i < 8; ++i) CHK(is_nan(out[i]));
+    CHK(!is_nan(out[8]));
+}
+
+static void test_dema_known_values(void) {
+    /* Verify DEMA is 2*EMA1 - EMA2 at the last index by computing manually. */
+    double out[20]; double in[20];
+    for (int i = 0; i < 20; ++i) in[i] = (double)(i + 1);
+    CHK(af_dema(in, 20, 3, out) == AF_OK);
+    /* Compute EMA(3) manually */
+    double e1[20], e2[20];
+    CHK(af_ema(in, 20, 3, e1) == AF_OK);
+    CHK(af_ema(e1, 20, 3, e2) == AF_OK);
+    for (int i = 0; i < 20; ++i) {
+        if (!is_nan(e1[i]) && !is_nan(e2[i]))
+            CHK_NEAR(out[i], 2.0*e1[i] - e2[i], 1e-12);
+    }
+}
+
+/* ── TEMA ──────────────────────────────────────────────────────────────── */
+static void test_tema_invalid_args(void) {
+    double out[4]; double in[] = {1,2,3,4};
+    CHK(af_tema(NULL, 4, 2, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_tema(in,   4, 2, NULL) == AF_ERR_INVALID_PARAM);
+    CHK(af_tema(in,   4, 0, out) == AF_ERR_INVALID_PARAM);
+}
+
+static void test_tema_insufficient_data(void) {
+    double out[2]; double in[] = {1.0, 2.0};
+    CHK(af_tema(in, 2, 5, out) == AF_OK); /* runs but all NaN */
+    CHK(is_nan(out[0]) && is_nan(out[1]));
+}
+
+static void test_tema_constant_input(void) {
+    /* TEMA of a constant series must equal that constant. */
+    double out[50]; double in[50];
+    for (int i = 0; i < 50; ++i) in[i] = 3.14;
+    CHK(af_tema(in, 50, 5, out) == AF_OK);
+    CHK_NEAR(out[49], 3.14, 1e-9);
+}
+
+static void test_tema_nan_prefix(void) {
+    /* period=5: EMA1 valid at 4, EMA2 at 8, EMA3 at 12. */
+    double out[25]; double in[25];
+    for (int i = 0; i < 25; ++i) in[i] = 100.0 + i;
+    CHK(af_tema(in, 25, 5, out) == AF_OK);
+    for (int i = 0; i < 12; ++i) CHK(is_nan(out[i]));
+    CHK(!is_nan(out[12]));
+}
+
+static void test_tema_known_values(void) {
+    /* TEMA = 3*EMA1 - 3*EMA2 + EMA3 at every valid index. */
+    double out[25]; double in[25];
+    for (int i = 0; i < 25; ++i) in[i] = (double)(i + 1) * 0.5;
+    CHK(af_tema(in, 25, 3, out) == AF_OK);
+    double e1[25], e2[25], e3[25];
+    CHK(af_ema(in, 25, 3, e1) == AF_OK);
+    CHK(af_ema(e1, 25, 3, e2) == AF_OK);
+    CHK(af_ema(e2, 25, 3, e3) == AF_OK);
+    for (int i = 0; i < 25; ++i) {
+        if (!is_nan(e1[i]) && !is_nan(e2[i]) && !is_nan(e3[i]))
+            CHK_NEAR(out[i], 3.0*e1[i] - 3.0*e2[i] + e3[i], 1e-12);
+    }
+}
+
+/* ── TRIX ──────────────────────────────────────────────────────────────── */
+static void test_trix_invalid_args(void) {
+    double out[4]; double in[] = {1,2,3,4};
+    CHK(af_trix(NULL, 4, 2, out) == AF_ERR_INVALID_PARAM);
+    CHK(af_trix(in,   4, 2, NULL) == AF_ERR_INVALID_PARAM);
+    CHK(af_trix(in,   4, 0, out) == AF_ERR_INVALID_PARAM);
+}
+
+static void test_trix_insufficient_data(void) {
+    double out[2]; double in[] = {1.0, 2.0};
+    CHK(af_trix(in, 2, 10, out) == AF_OK); /* runs but all NaN */
+    CHK(is_nan(out[0]) && is_nan(out[1]));
+}
+
+static void test_trix_constant_input(void) {
+    /* Constant input → EMA3 is constant → ROC = 0. */
+    double out[50]; double in[50];
+    for (int i = 0; i < 50; ++i) in[i] = 10.0;
+    CHK(af_trix(in, 50, 5, out) == AF_OK);
+    /* After warm-up (EMA3 valid from index 12 onward for period=5),
+       TRIX should be 0. Allow a tiny epsilon for floating-point. */
+    CHK_NEAR(out[49], 0.0, 1e-9);
+}
+
+static void test_trix_nan_prefix(void) {
+    /* period=5: EMA3 first valid at index 12.  TRIX needs two consecutive
+       EMA3 values, so first valid TRIX index = 13. */
+    double out[25]; double in[25];
+    for (int i = 0; i < 25; ++i) in[i] = 100.0 + i;
+    CHK(af_trix(in, 25, 5, out) == AF_OK);
+    /* Indices 0..12 must be NaN (no pair of valid EMA3 values yet). */
+    for (int i = 0; i <= 12; ++i) CHK(is_nan(out[i]));
+    CHK(!is_nan(out[13]));
+}
+
+static void test_trix_uptrend_positive(void) {
+    /* Strict uptrend → EMA3 rises → TRIX > 0. */
+    double out[50]; double in[50];
+    for (int i = 0; i < 50; ++i) in[i] = 100.0 + i * 0.5;
+    CHK(af_trix(in, 50, 5, out) == AF_OK);
+    for (int i = 14; i < 50; ++i) CHK(out[i] > 0.0);
+}
+
 /* ── runner ────────────────────────────────────────────────────────────── */
 void test_indicators_run(int *total_passed, int *total_failed) {
     /* legacy smoke checks from test_smoke.c — keep them. */
@@ -861,6 +1047,29 @@ void test_indicators_run(int *total_passed, int *total_failed) {
     test_keltner_ordering();
     test_keltner_constant_input();
     test_keltner_nan_prefix();
+
+    test_hma_invalid_args();
+    test_hma_insufficient_data();
+    test_hma_constant_input();
+    test_hma_known_period4();
+
+    test_dema_invalid_args();
+    test_dema_insufficient_data();
+    test_dema_constant_input();
+    test_dema_nan_prefix();
+    test_dema_known_values();
+
+    test_tema_invalid_args();
+    test_tema_insufficient_data();
+    test_tema_constant_input();
+    test_tema_nan_prefix();
+    test_tema_known_values();
+
+    test_trix_invalid_args();
+    test_trix_insufficient_data();
+    test_trix_constant_input();
+    test_trix_nan_prefix();
+    test_trix_uptrend_positive();
 
     *total_passed += g_passed;
     *total_failed += g_failed;

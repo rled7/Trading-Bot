@@ -41,6 +41,15 @@ int af_is_double_bottom       (const af_bar_t *bars, size_t n); /* needs n >= 30
 int af_is_ascending_triangle  (const af_bar_t *bars, size_t n); /* needs n >= 20 */
 int af_is_descending_triangle (const af_bar_t *bars, size_t n); /* needs n >= 20 */
 
+/* Head and Shoulders (bearish): needs n >= 40. */
+int af_is_head_and_shoulders         (const af_bar_t *bars, size_t n);
+/* Inverse Head and Shoulders (bullish): needs n >= 40. */
+int af_is_inverse_head_and_shoulders (const af_bar_t *bars, size_t n);
+/* Bullish Flag: needs n >= 20. */
+int af_is_bullish_flag               (const af_bar_t *bars, size_t n);
+/* Bearish Flag: needs n >= 20. */
+int af_is_bearish_flag               (const af_bar_t *bars, size_t n);
+
 /* Match record produced by af_scan_patterns. */
 typedef struct {
     int         bar_index;

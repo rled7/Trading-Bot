@@ -426,6 +426,108 @@ af_error_t af_vwap(const double *high, const double *low, const double *close,
     return AF_OK;
 }
 
+/* ── HMA ───────────────────────────────────────────────────────────────── */
+/* Matches cpp/ af_hma exactly.
+   half = (int)sqrt(period/2), clamped to >=1 (note: cpp uses sqrt(period/2.0))
+   sq   = (int)sqrt(period),   clamped to >=2
+   raw  = 2*WMA(half) - WMA(period); out = WMA(raw, sq) */
+af_error_t af_hma(const double *src, size_t n, size_t period, double *out) {
+    if (!src || !out || period < 2) return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+
+    int half = (int)af_sqrt((double)period / 2.0);
+    if (half < 1) half = 1;
+    int sq = (int)af_sqrt((double)period);
+    if (sq < 2) sq = 2;
+
+    double *wh  = (double*)malloc(n * sizeof(double));
+    double *wf  = (double*)malloc(n * sizeof(double));
+    double *raw = (double*)malloc(n * sizeof(double));
+    if (!wh || !wf || !raw) { free(wh); free(wf); free(raw); return AF_ERR_IO; }
+
+    af_wma(src, n, (size_t)half, wh);
+    af_wma(src, n, period, wf);
+    for (size_t i = 0; i < n; ++i)
+        raw[i] = (is_nan(wh[i]) || is_nan(wf[i])) ? AF_NAN : 2.0 * wh[i] - wf[i];
+    af_wma(raw, n, (size_t)sq, out);
+
+    free(wh); free(wf); free(raw);
+    return AF_OK;
+}
+
+/* ── DEMA ──────────────────────────────────────────────────────────────── */
+/* Matches cpp/ af_dema exactly.
+   out[i] = 2*EMA1[i] - EMA2[i], NaN if either is NaN. */
+af_error_t af_dema(const double *src, size_t n, size_t period, double *out) {
+    if (!src || !out || period == 0) return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+
+    double *e1 = (double*)malloc(n * sizeof(double));
+    double *e2 = (double*)malloc(n * sizeof(double));
+    if (!e1 || !e2) { free(e1); free(e2); return AF_ERR_IO; }
+
+    af_ema(src, n, period, e1);
+    af_ema(e1,  n, period, e2);
+    for (size_t i = 0; i < n; ++i)
+        out[i] = (is_nan(e1[i]) || is_nan(e2[i])) ? AF_NAN : 2.0 * e1[i] - e2[i];
+
+    free(e1); free(e2);
+    return AF_OK;
+}
+
+/* ── TEMA ──────────────────────────────────────────────────────────────── */
+/* Matches cpp/ af_tema exactly.
+   out[i] = 3*EMA1[i] - 3*EMA2[i] + EMA3[i], NaN if any is NaN. */
+af_error_t af_tema(const double *src, size_t n, size_t period, double *out) {
+    if (!src || !out || period == 0) return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+
+    double *e1 = (double*)malloc(n * sizeof(double));
+    double *e2 = (double*)malloc(n * sizeof(double));
+    double *e3 = (double*)malloc(n * sizeof(double));
+    if (!e1 || !e2 || !e3) { free(e1); free(e2); free(e3); return AF_ERR_IO; }
+
+    af_ema(src, n, period, e1);
+    af_ema(e1,  n, period, e2);
+    af_ema(e2,  n, period, e3);
+    for (size_t i = 0; i < n; ++i)
+        out[i] = (is_nan(e1[i]) || is_nan(e2[i]) || is_nan(e3[i]))
+                 ? AF_NAN : 3.0 * e1[i] - 3.0 * e2[i] + e3[i];
+
+    free(e1); free(e2); free(e3);
+    return AF_OK;
+}
+
+/* ── TRIX ──────────────────────────────────────────────────────────────── */
+/* Matches cpp/ af_trix (trix output only).
+   EMA3 = EMA(EMA(EMA(src, period), period), period)
+   out[i] = (EMA3[i] - EMA3[i-1]) / EMA3[i-1] * 100, when EMA3[i-1] != 0. */
+af_error_t af_trix(const double *src, size_t n, size_t period, double *out) {
+    if (!src || !out || period == 0) return AF_ERR_INVALID_PARAM;
+    fill_nan(out, n);
+
+    double *e1 = (double*)malloc(n * sizeof(double));
+    double *e2 = (double*)malloc(n * sizeof(double));
+    double *e3 = (double*)malloc(n * sizeof(double));
+    if (!e1 || !e2 || !e3) { free(e1); free(e2); free(e3); return AF_ERR_IO; }
+
+    af_ema(src, n, period, e1);
+    af_ema(e1,  n, period, e2);
+    af_ema(e2,  n, period, e3);
+
+    /* out already fill_nan'd; compute ROC of e3. */
+    for (size_t i = 1; i < n; ++i) {
+        if (!is_nan(e3[i]) && !is_nan(e3[i - 1])) {
+            double prev = e3[i - 1];
+            if (prev > 1e-12 || prev < -1e-12)
+                out[i] = (e3[i] - prev) / prev * 100.0;
+        }
+    }
+
+    free(e1); free(e2); free(e3);
+    return AF_OK;
+}
+
 /* ── Keltner Channels ──────────────────────────────────────────────────── */
 af_error_t af_keltner(const double *high, const double *low, const double *close,
                       size_t n, size_t ema_period, size_t atr_period, double mult,

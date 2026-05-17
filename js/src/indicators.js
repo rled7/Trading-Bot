@@ -422,6 +422,123 @@ export function keltner(highs, lows, closes, emaPeriod = 20, atrPeriod = 10, mul
     return { upper, middle, lower };
 }
 
+// ── HMA (Hull Moving Average) ─────────────────────────────────────────────────
+// Matches cpp/ af_hma exactly.
+// half = trunc(sqrt(period/2)); sq = trunc(sqrt(period)); sq clamped to >= 2.
+// raw[i] = 2*WMA(half)[i] - WMA(period)[i]  (null if either is null)
+// out = WMA(raw, sq)
+export function hma(values, period) {
+    checkPeriod(period);
+    if (period < 2) throw new Error(`hma period must be >= 2, got ${period}`);
+    const n = values.length;
+    const out = new Array(n).fill(null);
+
+    const half = Math.max(1, Math.trunc(Math.sqrt(period / 2.0)));
+    const sq   = Math.max(2, Math.trunc(Math.sqrt(period)));
+
+    const wh  = wma(values, half);
+    const wf  = wma(values, period);
+    const raw = new Array(n);
+    for (let i = 0; i < n; i++) {
+        raw[i] = (wh[i] === null || wf[i] === null) ? null : 2.0 * wh[i] - wf[i];
+    }
+
+    // WMA of raw — reuse wma but raw has leading nulls; handle manually
+    // wma expects a flat array and uses period-length windows; here raw may have nulls
+    // at the start. We need WMA(raw, sq) treating nulls as unavailable.
+    const wsum = sq * (sq + 1) / 2;
+    for (let i = sq - 1; i < n; i++) {
+        let s = 0;
+        let valid = true;
+        for (let j = 0; j < sq; j++) {
+            const v = raw[i - (sq - 1 - j)];
+            if (v === null) { valid = false; break; }
+            s += v * (j + 1);
+        }
+        if (valid) out[i] = s / wsum;
+    }
+    return out;
+}
+
+// ── DEMA (Double EMA) ─────────────────────────────────────────────────────────
+// DEMA = 2*EMA1 - EMA(EMA1). Null propagates where either is null.
+// Matches cpp/ af_dema.
+export function dema(values, period) {
+    checkPeriod(period);
+    const n = values.length;
+    const out = new Array(n).fill(null);
+    const e1 = ema(values, period);
+    const e2 = emaOfSparse(e1, period);
+    for (let i = 0; i < n; i++) {
+        if (e1[i] !== null && e2[i] !== null) out[i] = 2.0 * e1[i] - e2[i];
+    }
+    return out;
+}
+
+// ── TEMA (Triple EMA) ─────────────────────────────────────────────────────────
+// TEMA = 3*EMA1 - 3*EMA2 + EMA3. Null propagates.
+// Matches cpp/ af_tema.
+export function tema(values, period) {
+    checkPeriod(period);
+    const n = values.length;
+    const e1 = ema(values, period);
+    const e2 = emaOfSparse(e1, period);
+    const e3 = emaOfSparse(e2, period);
+    const out = new Array(n).fill(null);
+    for (let i = 0; i < n; i++) {
+        if (e1[i] !== null && e2[i] !== null && e3[i] !== null) {
+            out[i] = 3.0 * e1[i] - 3.0 * e2[i] + e3[i];
+        }
+    }
+    return out;
+}
+
+// ── TRIX ──────────────────────────────────────────────────────────────────────
+// Triple-smoothed EMA, then ROC of that.
+// trix[i] = (e3[i] - e3[i-1]) / e3[i-1] * 100  when both are valid and e3[i-1] != 0.
+// Returns only the TRIX line (no signal). Matches cpp/ af_trix (signal ignored).
+export function trix(values, period) {
+    checkPeriod(period);
+    const n = values.length;
+    const out = new Array(n).fill(null);
+    const e1 = ema(values, period);
+    const e2 = emaOfSparse(e1, period);
+    const e3 = emaOfSparse(e2, period);
+    const EPSILON = 1e-10;
+    for (let i = 1; i < n; i++) {
+        if (e3[i] !== null && e3[i - 1] !== null && Math.abs(e3[i - 1]) > EPSILON) {
+            out[i] = (e3[i] - e3[i - 1]) / e3[i - 1] * 100.0;
+        }
+    }
+    return out;
+}
+
+// ── Internal: EMA of a sparse array (with leading nulls) ─────────────────────
+// Mirrors cpp/ af_ema behaviour: seeds from the first `period` consecutive values
+// starting at the first non-null index, then runs the EMA forward.
+// Nulls in the middle are NOT supported (matches cpp/ which uses NaN-filled arrays).
+function emaOfSparse(values, period) {
+    const n = values.length;
+    const out = new Array(n).fill(null);
+    // Find first non-null index
+    let start = -1;
+    for (let i = 0; i < n; i++) {
+        if (values[i] !== null) { start = i; break; }
+    }
+    if (start < 0 || n - start < period) return out;
+    const alpha = 2.0 / (period + 1);
+    let seed = 0;
+    for (let i = start; i < start + period; i++) seed += values[i];
+    seed /= period;
+    out[start + period - 1] = seed;
+    let prev = seed;
+    for (let i = start + period; i < n; i++) {
+        prev = values[i] * alpha + prev * (1 - alpha);
+        out[i] = prev;
+    }
+    return out;
+}
+
 // ── ADX (Average Directional Index) ──────────────────────────────────────────
 // Wilder smoothing (alpha = 1/period) over TR, +DM, -DM.
 // Requires n >= 2*period + 1 (matching cpp/ af_adx guard).

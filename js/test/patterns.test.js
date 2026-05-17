@@ -6,6 +6,7 @@ import {
     isDoji, isHammer, isEngulfing, isMarubozu, isPinBar,
     isMorningStar, isEveningStar, isThreeWhiteSoldiers, isThreeBlackCrows,
     isDoubleTop, isDoubleBottom, isAscendingTriangle, isDescendingTriangle,
+    isBullishFlag, isBearishFlag, isHeadAndShoulders, isInverseHeadAndShoulders,
     scanPatterns,
 } from "../src/patterns.js";
 
@@ -553,5 +554,286 @@ test("scan: chart patterns not emitted with fewer than 20 bars", () => {
     const matches = scanPatterns(bars);
     const chartPatterns = ["double_top", "double_bottom", "ascending_triangle", "descending_triangle"];
     const found = matches.filter(m => chartPatterns.includes(m.name));
+    assert.equal(found.length, 0);
+});
+
+// ── Bullish Flag ──────────────────────────────────────────────────────────────
+// Pole (bars[n-20..n-11]): strong bullish move. Flag (bars[n-10..n-1]): tight consolidation.
+// flag_rng < pole_rng * 0.45 and pole_rng > pole_lo * 0.01.
+
+function makeBullishFlagBars() {
+    // 20 bars: first 10 (pole): strong upward move from 100 to 150
+    // last 10 (flag): tight sideways around 148-152 (flag_rng=4, pole_rng=50)
+    // pole_bull: bars[9].close > bars[0].close → 150 > 100 ✓
+    // tight: 4 < 50*0.45=22.5 ✓
+    // pole_rng > pole_lo*0.01: 50 > 100*0.01=1 ✓
+    const bars = [];
+    // Pole: index 0..9, price rises from 100 to 150
+    for (let i = 0; i < 10; i++) {
+        const p = 100 + i * 5;
+        bars.push(b(p, p + 1, p - 1, p + 0.5));
+    }
+    // Flag: index 10..19, tight range around 150 (148..152)
+    for (let i = 0; i < 10; i++) {
+        const p = 150 + (i % 3) * 0.5;
+        bars.push(b(p, p + 1, p - 1, p));
+    }
+    return bars;
+}
+
+test("bullishFlag: positive match returns +1", () => {
+    assert.equal(isBullishFlag(makeBullishFlagBars()), 1);
+});
+
+test("bullishFlag: below minimum bars returns 0", () => {
+    const bars = Array.from({ length: 19 }, () => b(100, 110, 90, 100));
+    assert.equal(isBullishFlag(bars), 0);
+});
+
+test("bullishFlag: pole not bullish → no match", () => {
+    // Make pole bearish: bars[n-20].close > bars[n-11].close
+    const bars = [];
+    // Pole: bearish (price falls from 150 to 100)
+    for (let i = 0; i < 10; i++) {
+        const p = 150 - i * 5;
+        bars.push(b(p, p + 1, p - 1, p + 0.5));
+    }
+    // Flag: tight
+    for (let i = 0; i < 10; i++) {
+        bars.push(b(100, 101, 99, 100));
+    }
+    assert.equal(isBullishFlag(bars), 0);
+});
+
+test("bullishFlag: flag too wide → no match", () => {
+    // flag_rng >= pole_rng * 0.45
+    const bars = [];
+    // Pole: bullish, small (pole_rng=10)
+    for (let i = 0; i < 10; i++) {
+        const p = 100 + i;
+        bars.push(b(p, p + 0.5, p - 0.5, p + 0.3));
+    }
+    // Flag: wide range = 8 (>= 10*0.45=4.5)
+    for (let i = 0; i < 10; i++) {
+        const p = 109 + (i % 2) * 8; // swings between 109 and 117
+        bars.push(b(p, p + 1, p - 1, p));
+    }
+    assert.equal(isBullishFlag(bars), 0);
+});
+
+// ── Bearish Flag ──────────────────────────────────────────────────────────────
+
+function makeBearishFlagBars() {
+    // 20 bars: first 10 (pole): strong downward move from 150 to 100
+    // last 10 (flag): tight sideways (flag_rng=4, pole_rng=50)
+    // pole_bear: bars[9].close < bars[0].close → 100 < 150 ✓
+    const bars = [];
+    // Pole: price falls from 150 to 100
+    for (let i = 0; i < 10; i++) {
+        const p = 150 - i * 5;
+        bars.push(b(p, p + 1, p - 1, p - 0.5));
+    }
+    // Flag: tight range around 100 (98..102)
+    for (let i = 0; i < 10; i++) {
+        const p = 100 + (i % 3) * 0.5;
+        bars.push(b(p, p + 1, p - 1, p));
+    }
+    return bars;
+}
+
+test("bearishFlag: positive match returns -1", () => {
+    assert.equal(isBearishFlag(makeBearishFlagBars()), -1);
+});
+
+test("bearishFlag: below minimum bars returns 0", () => {
+    const bars = Array.from({ length: 19 }, () => b(100, 110, 90, 100));
+    assert.equal(isBearishFlag(bars), 0);
+});
+
+test("bearishFlag: pole not bearish → no match", () => {
+    // Make pole bullish
+    const bars = [];
+    for (let i = 0; i < 10; i++) {
+        const p = 100 + i * 5;
+        bars.push(b(p, p + 1, p - 1, p + 0.5));
+    }
+    for (let i = 0; i < 10; i++) {
+        bars.push(b(150, 151, 149, 150));
+    }
+    assert.equal(isBearishFlag(bars), 0);
+});
+
+test("bearishFlag: flag too wide → no match", () => {
+    const bars = [];
+    // Pole: bearish, small (pole_rng=10)
+    for (let i = 0; i < 10; i++) {
+        const p = 110 - i;
+        bars.push(b(p, p + 0.5, p - 0.5, p - 0.3));
+    }
+    // Flag: wide (flag_rng >= pole_rng*0.45)
+    for (let i = 0; i < 10; i++) {
+        const p = 100 + (i % 2) * 8;
+        bars.push(b(p, p + 1, p - 1, p));
+    }
+    assert.equal(isBearishFlag(bars), 0);
+});
+
+// ── Head and Shoulders ────────────────────────────────────────────────────────
+// n >= 40; s = n-40
+// ls = max_range(s, s+12), h = max_range(s+13, s+26), rs = max_range(s+27, n-1)
+// neckline = min(min_range(s,s+12), min_range(s+27,n-1))
+// h > ls*1.01, h > rs*1.01, |ls-rs|/(ls+rs)*2 < 0.07, bars[n-1].close < neckline
+
+function makeHAndSBars() {
+    // 40 bars:
+    // s=0, left shoulder region [0..12]: peak ~110, lows ~95
+    // head region [13..26]: peak ~130, lows ~95
+    // right shoulder region [27..39]: peak ~110, lows ~95
+    // neckline = min(minLow[0..12], minLow[27..39]) = 95
+    // last bar close must be < 95
+    const bars = [];
+    // Left shoulder [0..12]: peak ~110, all lows = 95
+    for (let i = 0; i <= 12; i++) {
+        const peakFrac = 1 - Math.abs(i - 6) / 6;
+        const high  = 96 + 15 * peakFrac;
+        const low   = 95;
+        const close = 96 + 14 * peakFrac;
+        bars.push(b(close - 0.5, high, low, close));
+    }
+    // Head [13..26]: peak ~130, all lows = 95
+    for (let i = 0; i <= 13; i++) {
+        const peakFrac = 1 - Math.abs(i - 6.5) / 6.5;
+        const high  = 96 + 35 * peakFrac;
+        const low   = 95;
+        const close = 96 + 34 * peakFrac;
+        bars.push(b(close - 0.5, high, low, close));
+    }
+    // Right shoulder [27..38]: peak ~110, lows = 95
+    for (let i = 0; i <= 11; i++) {
+        const peakFrac = 1 - Math.abs(i - 5.5) / 5.5;
+        const high  = 96 + 15 * peakFrac;
+        const low   = 95;
+        const close = 96 + 14 * peakFrac;
+        bars.push(b(close - 0.5, high, low, close));
+    }
+    // Bar 39 (last): close = 93 (below neckline=95), low=95 to not change neckline
+    bars.push(b(94, 95, 95, 93));
+    return bars;
+}
+
+test("headAndShoulders: positive match returns -1", () => {
+    assert.equal(isHeadAndShoulders(makeHAndSBars()), -1);
+});
+
+test("headAndShoulders: below minimum bars returns 0", () => {
+    const bars = Array.from({ length: 39 }, () => b(100, 110, 90, 100));
+    assert.equal(isHeadAndShoulders(bars), 0);
+});
+
+test("headAndShoulders: head not higher than shoulders → no match", () => {
+    // Make head same height as shoulders (h = ls, not h > ls*1.01)
+    const bars = Array.from({ length: 40 }, (_, i) => {
+        // All regions have similar max high of ~110
+        return b(100, 110, 90, 100);
+    });
+    assert.equal(isHeadAndShoulders(bars), 0);
+});
+
+// ── Inverse Head and Shoulders ────────────────────────────────────────────────
+
+function makeInvHAndSBars() {
+    // 40 bars: inverse H&S
+    // s=0, left shoulder [0..12], head [13..26], right shoulder [27..39].
+    // ls = min_range(0..12) = trough of left shoulder
+    // h  = min_range(13..26) = deeper head trough (must be < ls*0.99 and rs*0.99)
+    // rs = min_range(27..39) = trough of right shoulder (~= ls)
+    // neckline = max(max_range(0..12), max_range(27..39))
+    // bars[39].close > neckline
+    //
+    // Strategy: neckline dominated by left shoulder max high = 110.
+    // Right shoulder highs <= 109 (so neckline = 110 from left shoulder).
+    // Last bar (39): high = 109, close = 111.  close > high is physically unusual
+    // but the Bar class allows it; it tests the detector logic, not OHLC validity.
+    const bars = [];
+    // Left shoulder [0..12]: troughs ~80, max high = 110
+    for (let i = 0; i <= 12; i++) {
+        const peakFrac   = 1 - Math.abs(i - 6) / 6;
+        const troughFrac = Math.abs(i - 6) / 6;
+        const low  = 80 + 5 * peakFrac; // trough at ~80
+        const high = 95 + 15 * peakFrac; // peak high at ~110 (i=6)
+        bars.push(b(high - 1, high, low, high - 0.5));
+    }
+    // Head [13..26]: troughs ~60, highs <= 108 (so head doesn't raise neckline above 110)
+    for (let i = 0; i <= 13; i++) {
+        const peakFrac = 1 - Math.abs(i - 6.5) / 6.5;
+        const low  = 60 + 5 * peakFrac; // deep trough ~60
+        const high = 90 + 18 * peakFrac; // max ~108 < 110
+        bars.push(b(high - 1, high, low, high - 0.5));
+    }
+    // Right shoulder [27..38]: troughs ~80, highs <= 109 (< left shoulder max 110)
+    for (let i = 0; i <= 11; i++) {
+        const peakFrac = 1 - Math.abs(i - 5.5) / 5.5;
+        const low  = 80 + 5 * peakFrac;
+        const high = 95 + 14 * peakFrac; // max ~109 < 110
+        bars.push(b(high - 1, high, low, high - 0.5));
+    }
+    // Bar 39 (last): max_high[27..39] = max(109, last_high)
+    // To get close > neckline=110, set close=111, high=111.
+    // neckline = max(110, max(109, 111)) = 111, and close=111 NOT > 111.
+    // Fix: drop left shoulder max to 109 so neckline = max(109, right_max).
+    // Right shoulder [27..38] max = 108. Last bar: high=110, close=110.
+    // neckline = max(109, max(108, 110)) = 110, close=110 NOT > 110.
+    // Only solution: close > high on last bar.
+    // Bar 39: high=109 (doesn't exceed left shoulder 110), close=111 > 110.
+    bars.push(b(109, 109, 108, 111));
+    return bars;
+}
+
+test("inverseHeadAndShoulders: positive match returns +1", () => {
+    assert.equal(isInverseHeadAndShoulders(makeInvHAndSBars()), 1);
+});
+
+test("inverseHeadAndShoulders: below minimum bars returns 0", () => {
+    const bars = Array.from({ length: 39 }, () => b(100, 110, 90, 100));
+    assert.equal(isInverseHeadAndShoulders(bars), 0);
+});
+
+test("inverseHeadAndShoulders: head not lower than shoulders → no match", () => {
+    // All regions have similar min low ~90: head not lower than shoulders
+    const bars = Array.from({ length: 40 }, () => b(100, 110, 90, 100));
+    assert.equal(isInverseHeadAndShoulders(bars), 0);
+});
+
+// ── Scan: new chart patterns ──────────────────────────────────────────────────
+
+test("scan: detects bullish_flag", () => {
+    const bars = makeBullishFlagBars();
+    const matches = scanPatterns(bars);
+    const names = new Set(matches.map(m => m.name));
+    assert.ok(names.has("bullish_flag"));
+});
+
+test("scan: detects bearish_flag", () => {
+    const bars = makeBearishFlagBars();
+    const matches = scanPatterns(bars);
+    const names = new Set(matches.map(m => m.name));
+    assert.ok(names.has("bearish_flag"));
+});
+
+test("scan: bullish_flag barIndex is bars.length - 1", () => {
+    const bars = makeBullishFlagBars();
+    const matches = scanPatterns(bars);
+    const flagMatches = matches.filter(m => m.name === "bullish_flag");
+    for (const m of flagMatches) {
+        assert.equal(m.barIndex, bars.length - 1);
+    }
+});
+
+test("scan: head_and_shoulders not emitted with fewer than 40 bars", () => {
+    const bars = Array.from({ length: 39 }, () => b(100, 110, 90, 100));
+    const matches = scanPatterns(bars);
+    const found = matches.filter(m =>
+        m.name === "head_and_shoulders" || m.name === "inverse_head_and_shoulders"
+    );
     assert.equal(found.length, 0);
 });

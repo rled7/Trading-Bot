@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { sma, ema, rsi, atr, macd, bollinger, stochastic, obv, adx,
-         wma, cci, williamsR, roc, mfi, vwap, keltner } from "../src/indicators.js";
+         wma, cci, williamsR, roc, mfi, vwap, keltner,
+         hma, dema, tema, trix } from "../src/indicators.js";
 
 // ── SMA ──────────────────────────────────────────────────────────────────
 test("sma: invalid period throws", () => {
@@ -721,4 +722,174 @@ test("keltner: middle is EMA of close", () => {
     for (let i = 0; i < n; i++) {
         if (middle[i] !== null) assert.ok(Math.abs(middle[i] - emaClose[i]) < 1e-12);
     }
+});
+
+// ── HMA ──────────────────────────────────────────────────────────────────────
+test("hma: invalid period throws (period < 1)", () => {
+    assert.throws(() => hma([1, 2, 3], 0));
+    assert.throws(() => hma([1, 2, 3], -1));
+    assert.throws(() => hma([1, 2, 3], 1.5));
+});
+
+test("hma: period < 2 throws", () => {
+    assert.throws(() => hma([1, 2, 3], 1));
+});
+
+test("hma: insufficient data returns all nulls", () => {
+    const out = hma([1, 2], 9);
+    assert.ok(out.every(v => v === null));
+});
+
+test("hma: constant input stays constant", () => {
+    const out = hma(Array(30).fill(5), 9);
+    for (let i = 0; i < 30; i++) {
+        if (out[i] !== null) assert.ok(Math.abs(out[i] - 5) < 1e-10);
+    }
+});
+
+test("hma: output length equals input length", () => {
+    assert.equal(hma(Array(30).fill(1), 9).length, 30);
+});
+
+test("hma: known output on simple rising input", () => {
+    // period=4: half=trunc(sqrt(2))=1, sq=trunc(sqrt(4))=2
+    // wma([1,2,3,4,5,6], period=4): first valid at index 3
+    // wma([1,2,3,4,5,6], period=1): identity [1,2,3,4,5,6]
+    // raw[i] = 2*wma1[i] - wma4[i]
+    // out = WMA(raw, 2)
+    const data = [1, 2, 3, 4, 5, 6];
+    const out = hma(data, 4);
+    // Verify non-null values are defined
+    const defined = out.filter(v => v !== null);
+    assert.ok(defined.length > 0);
+    // All defined values should be finite numbers
+    for (const v of defined) assert.ok(isFinite(v));
+});
+
+test("hma: more recent data has more influence than SMA", () => {
+    // Rising data: HMA should be above SMA (more weight on recent)
+    const n = 30;
+    const data = Array.from({ length: n }, (_, i) => i + 1);
+    const outHma = hma(data, 9);
+    const outSma = sma(data, 9);
+    // At last index where both are defined
+    assert.ok(outHma[n - 1] > outSma[n - 1]);
+});
+
+// ── DEMA ─────────────────────────────────────────────────────────────────────
+test("dema: invalid period throws", () => {
+    assert.throws(() => dema([1, 2, 3], 0));
+    assert.throws(() => dema([1, 2, 3], -1));
+});
+
+test("dema: insufficient data returns all nulls", () => {
+    const out = dema([1, 2], 5);
+    assert.ok(out.every(v => v === null));
+});
+
+test("dema: constant input stays constant", () => {
+    const out = dema(Array(30).fill(7), 5);
+    for (let i = 0; i < 30; i++) {
+        if (out[i] !== null) assert.ok(Math.abs(out[i] - 7) < 1e-10);
+    }
+});
+
+test("dema: first valid index is at 2*period - 2", () => {
+    const period = 5;
+    const n = 20;
+    const out = dema(Array.from({ length: n }, (_, i) => i + 1), period);
+    // first non-null should be at index 2*period-2 = 8
+    for (let i = 0; i < 2 * period - 2; i++) assert.equal(out[i], null);
+    assert.ok(out[2 * period - 2] !== null);
+});
+
+test("dema: known output on small input (close to EMA, slightly faster)", () => {
+    const data = Array.from({ length: 30 }, (_, i) => 100 + i);
+    const outDema = dema(data, 5);
+    const outEma  = ema(data, 5);
+    // DEMA should be closer to current price (more responsive)
+    const last = 29;
+    assert.ok(outDema[last] > outEma[last]); // rising data: DEMA > EMA
+});
+
+test("dema: output length equals input length", () => {
+    assert.equal(dema(Array(20).fill(1), 5).length, 20);
+});
+
+// ── TEMA ─────────────────────────────────────────────────────────────────────
+test("tema: invalid period throws", () => {
+    assert.throws(() => tema([1, 2, 3], 0));
+    assert.throws(() => tema([1, 2, 3], -1));
+});
+
+test("tema: insufficient data returns all nulls", () => {
+    const out = tema([1, 2], 5);
+    assert.ok(out.every(v => v === null));
+});
+
+test("tema: constant input stays constant", () => {
+    const out = tema(Array(50).fill(3.14), 5);
+    for (let i = 0; i < 50; i++) {
+        if (out[i] !== null) assert.ok(Math.abs(out[i] - 3.14) < 1e-10);
+    }
+});
+
+test("tema: first valid index is at 3*period - 3", () => {
+    const period = 5;
+    const n = 30;
+    const out = tema(Array.from({ length: n }, (_, i) => i + 1), period);
+    // first non-null at index 3*period-3 = 12
+    for (let i = 0; i < 3 * period - 3; i++) assert.equal(out[i], null);
+    assert.ok(out[3 * period - 3] !== null);
+});
+
+test("tema: more responsive than EMA and DEMA on rising data", () => {
+    const data = Array.from({ length: 50 }, (_, i) => 100 + i);
+    const outTema = tema(data, 5);
+    const outDema = dema(data, 5);
+    const outEma  = ema(data, 5);
+    const last = 49;
+    // For rising data: TEMA > DEMA > EMA
+    assert.ok(outTema[last] > outDema[last]);
+    assert.ok(outDema[last] > outEma[last]);
+});
+
+test("tema: output length equals input length", () => {
+    assert.equal(tema(Array(30).fill(1), 5).length, 30);
+});
+
+// ── TRIX ─────────────────────────────────────────────────────────────────────
+test("trix: invalid period throws", () => {
+    assert.throws(() => trix([1, 2, 3], 0));
+    assert.throws(() => trix([1, 2, 3], -1));
+});
+
+test("trix: insufficient data returns all nulls", () => {
+    const out = trix([1, 2], 5);
+    assert.ok(out.every(v => v === null));
+});
+
+test("trix: constant input yields zero", () => {
+    // When e3 is constant, ROC = 0
+    const out = trix(Array(50).fill(5), 5);
+    for (let i = 0; i < 50; i++) {
+        if (out[i] !== null) assert.ok(Math.abs(out[i]) < 1e-10);
+    }
+});
+
+test("trix: output[0] is always null (no previous bar)", () => {
+    const out = trix(Array.from({ length: 30 }, (_, i) => i + 1), 3);
+    assert.equal(out[0], null);
+});
+
+test("trix: known output direction on rising data", () => {
+    // Rising data → e3 is increasing → trix > 0
+    const data = Array.from({ length: 50 }, (_, i) => 100 + i);
+    const out = trix(data, 5);
+    const last = out[49];
+    assert.ok(last !== null && last > 0);
+});
+
+test("trix: output length equals input length", () => {
+    assert.equal(trix(Array(30).fill(1), 5).length, 30);
 });

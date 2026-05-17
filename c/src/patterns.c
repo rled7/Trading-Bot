@@ -240,6 +240,76 @@ int af_is_descending_triangle(const af_bar_t *bars, size_t n) {
     return 0;
 }
 
+/* ── Head and Shoulders ────────────────────────────────────────────────── */
+/* Matches cpp/ chart_patterns.cpp HeadAndShoulders logic exactly (bearish). */
+int af_is_head_and_shoulders(const af_bar_t *bars, size_t n) {
+    if (n < 40) return 0;
+    size_t s = n - 40;
+    double ls = max_range(bars, s,      s + 12);
+    double h  = max_range(bars, s + 13, s + 26);
+    double rs = max_range(bars, s + 27, n - 1);
+    double nl_l = min_range(bars, s,      s + 12);
+    double nl_r = min_range(bars, s + 27, n - 1);
+    double neckline = nl_l < nl_r ? nl_l : nl_r;  /* std::min */
+    double sym = (ls + rs > 1e-12) ? (ls - rs) / (ls + rs) * 2.0 : 0.0;
+    if (sym < 0.0) sym = -sym;
+    if (h > ls * 1.01 && h > rs * 1.01 && sym < 0.07 &&
+        bars[n - 1].close < neckline)
+        return -1;
+    return 0;
+}
+
+/* ── Inverse Head and Shoulders ────────────────────────────────────────── */
+/* Matches cpp/ chart_patterns.cpp InverseHeadAndShoulders logic exactly (bullish). */
+int af_is_inverse_head_and_shoulders(const af_bar_t *bars, size_t n) {
+    if (n < 40) return 0;
+    size_t s = n - 40;
+    double ls = min_range(bars, s,      s + 12);
+    double h  = min_range(bars, s + 13, s + 26);
+    double rs = min_range(bars, s + 27, n - 1);
+    double nl_l = max_range(bars, s,      s + 12);
+    double nl_r = max_range(bars, s + 27, n - 1);
+    double neckline = nl_l > nl_r ? nl_l : nl_r;  /* std::max */
+    double sym = (ls + rs > 1e-12) ? (ls - rs) / (ls + rs) * 2.0 : 0.0;
+    if (sym < 0.0) sym = -sym;
+    if (h < ls * 0.99 && h < rs * 0.99 && sym < 0.07 &&
+        bars[n - 1].close > neckline)
+        return 1;
+    return 0;
+}
+
+/* ── Bullish Flag ───────────────────────────────────────────────────────── */
+/* Matches cpp/ chart_patterns.cpp BullishFlag logic exactly. */
+int af_is_bullish_flag(const af_bar_t *bars, size_t n) {
+    if (n < 20) return 0;
+    double pole_lo  = min_range(bars, n - 20, n - 11);
+    double pole_hi  = max_range(bars, n - 20, n - 11);
+    double pole_rng = pole_hi - pole_lo;
+    double flag_hi  = max_range(bars, n - 10, n - 1);
+    double flag_lo  = min_range(bars, n - 10, n - 1);
+    double flag_rng = flag_hi - flag_lo;
+    int pole_bull   = bars[n - 11].close > bars[n - 20].close;
+    int tight_flag  = flag_rng < pole_rng * 0.45;
+    if (pole_bull && tight_flag && pole_rng > pole_lo * 0.01)
+        return 1;
+    return 0;
+}
+
+/* ── Bearish Flag ───────────────────────────────────────────────────────── */
+/* Matches cpp/ chart_patterns.cpp BearishFlag logic exactly. */
+int af_is_bearish_flag(const af_bar_t *bars, size_t n) {
+    if (n < 20) return 0;
+    double pole_lo  = min_range(bars, n - 20, n - 11);
+    double pole_hi  = max_range(bars, n - 20, n - 11);
+    double pole_rng = pole_hi - pole_lo;
+    double flag_rng = max_range(bars, n - 10, n - 1) - min_range(bars, n - 10, n - 1);
+    int pole_bear   = bars[n - 11].close < bars[n - 20].close;
+    int tight_flag  = flag_rng < pole_rng * 0.45;
+    if (pole_bear && tight_flag && pole_rng > pole_lo * 0.01)
+        return -1;
+    return 0;
+}
+
 static int emit(af_pattern_match_t *out, size_t cap, size_t i, int idx,
                 const char *name, int sig)
 {
@@ -290,6 +360,10 @@ size_t af_scan_patterns(const af_bar_t *bars, size_t n,
             count += emit(out, out_cap, count, (int)(n - 1), "ascending_triangle", s);
         if ((s = af_is_descending_triangle(bars, n)))
             count += emit(out, out_cap, count, (int)(n - 1), "descending_triangle", s);
+        if ((s = af_is_bullish_flag(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "bullish_flag", s);
+        if ((s = af_is_bearish_flag(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "bearish_flag", s);
     }
     if (n >= 30) {
         int s;
@@ -297,6 +371,13 @@ size_t af_scan_patterns(const af_bar_t *bars, size_t n,
             count += emit(out, out_cap, count, (int)(n - 1), "double_top", s);
         if ((s = af_is_double_bottom(bars, n)))
             count += emit(out, out_cap, count, (int)(n - 1), "double_bottom", s);
+    }
+    if (n >= 40) {
+        int s;
+        if ((s = af_is_head_and_shoulders(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "head_and_shoulders", s);
+        if ((s = af_is_inverse_head_and_shoulders(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "inverse_head_and_shoulders", s);
     }
     return count;
 }

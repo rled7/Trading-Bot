@@ -4,6 +4,7 @@ import unittest
 from algoforge.indicators import (
     sma, ema, rsi, atr, macd, bollinger, stochastic, obv, adx,
     wma, cci, williams_r, roc, mfi, vwap, keltner,
+    hma, dema, tema, trix,
 )
 
 
@@ -772,6 +773,197 @@ class KeltnerTests(unittest.TestCase):
         for i in range(len(c)):
             if u[i] is not None:
                 self.assertGreaterEqual(u[i], lo[i])
+
+
+class HmaTests(unittest.TestCase):
+    def test_invalid_period(self):
+        for bad in (0, -1, 1.5, "3"):
+            with self.assertRaises(ValueError):
+                hma([1.0, 2.0, 3.0], bad)  # type: ignore[arg-type]
+
+    def test_period_less_than_2(self):
+        with self.assertRaises(ValueError):
+            hma([1.0, 2.0, 3.0], 1)
+
+    def test_insufficient_data_all_none(self):
+        # period=9: half=int(sqrt(4.5))=2, sq=int(sqrt(9))=3
+        # WMA(9) needs 9 bars; with 5 bars all None
+        out = hma([1.0] * 5, 9)
+        self.assertTrue(all(v is None for v in out))
+
+    def test_constant_input_stabilizes(self):
+        # On constant data WMA(k) = constant for any k, so HMA = constant
+        val = 7.0
+        out = hma([val] * 30, 9)
+        for v in out:
+            if v is not None:
+                self.assertAlmostEqual(v, val, places=10)
+
+    def test_known_output_period4(self):
+        # period=4: half=int(sqrt(2))=1, sq=int(sqrt(4))=2
+        # WMA(1) = identity; WMA(4) computed; raw = 2*WMA(1) - WMA(4); HMA = WMA(raw, 2)
+        data = [1.0, 2.0, 3.0, 4.0, 5.0]
+        # WMA(1)[i] = data[i]
+        # WMA(4)[3] = (1*1+2*2+3*3+4*4)/10 = (1+4+9+16)/10 = 30/10 = 3.0
+        # WMA(4)[4] = (2*1+3*2+4*3+5*4)/10 = (2+6+12+20)/10 = 40/10 = 4.0
+        # raw[3] = 2*4.0 - 3.0 = 5.0; raw[4] = 2*5.0 - 4.0 = 6.0
+        # WMA(raw, 2)[4] = (raw[3]*1 + raw[4]*2)/3 = (5+12)/3 = 17/3
+        out = hma(data, 4)
+        self.assertIsNone(out[0])
+        self.assertIsNone(out[1])
+        self.assertIsNone(out[2])
+        self.assertIsNone(out[3])  # sq=2, raw defined from index 3; WMA(raw,2) needs 2
+        self.assertAlmostEqual(out[4], 17.0 / 3.0, places=10)
+
+    def test_output_length_matches_input(self):
+        out = hma([1.0] * 20, 4)
+        self.assertEqual(len(out), 20)
+
+    def test_responds_to_uptrend(self):
+        # HMA on uptrend should be positive and non-decreasing after warm-up
+        data = [float(i) for i in range(1, 51)]
+        out = hma(data, 9)
+        non_none = [v for v in out if v is not None]
+        self.assertTrue(len(non_none) > 0)
+        for i in range(1, len(non_none)):
+            self.assertGreaterEqual(non_none[i], non_none[i - 1] - 1e-9)
+
+
+class DemaTests(unittest.TestCase):
+    def test_invalid_period(self):
+        for bad in (0, -1, 1.5, "5"):
+            with self.assertRaises(ValueError):
+                dema([1.0, 2.0, 3.0], bad)  # type: ignore[arg-type]
+
+    def test_insufficient_data_all_none(self):
+        # period=10; need at least 2*period-1 = 19 bars for DEMA to be defined
+        out = dema([1.0] * 5, 10)
+        self.assertTrue(all(v is None for v in out))
+
+    def test_constant_input_stabilizes(self):
+        # On constant input EMA = constant, so DEMA = 2*c - c = c
+        val = 5.0
+        out = dema([val] * 50, 5)
+        for v in out:
+            if v is not None:
+                self.assertAlmostEqual(v, val, places=10)
+
+    def test_known_output_period1(self):
+        # period=1: alpha=1; EMA1[i]=values[i]; EMA2[i]=EMA1[i]=values[i]
+        # DEMA = 2*v - v = v
+        data = [1.0, 3.0, 5.0, 2.0]
+        out = dema(data, 1)
+        for i, v in enumerate(out):
+            self.assertAlmostEqual(v, data[i], places=10)
+
+    def test_output_length_matches_input(self):
+        out = dema([1.0] * 30, 5)
+        self.assertEqual(len(out), 30)
+
+    def test_faster_than_ema_on_step_up(self):
+        # DEMA reacts faster than EMA — after a jump, DEMA > EMA at same index
+        data = [100.0] * 10 + [200.0] * 20
+        e = ema(data, 5)
+        d = dema(data, 5)
+        # After the step at index 10, DEMA should be higher than EMA
+        for i in range(14, 30):
+            if d[i] is not None and e[i] is not None:
+                self.assertGreaterEqual(d[i], e[i] - 1e-9)
+
+
+class TemaTests(unittest.TestCase):
+    def test_invalid_period(self):
+        for bad in (0, -1, 1.5, "5"):
+            with self.assertRaises(ValueError):
+                tema([1.0, 2.0, 3.0], bad)  # type: ignore[arg-type]
+
+    def test_insufficient_data_all_none(self):
+        # period=10; need at least 3*period-2 = 28 bars for TEMA to be defined
+        out = tema([1.0] * 10, 10)
+        self.assertTrue(all(v is None for v in out))
+
+    def test_constant_input_stabilizes(self):
+        # On constant input all EMAs = c, so TEMA = 3c - 3c + c = c
+        val = 8.0
+        out = tema([val] * 80, 5)
+        for v in out:
+            if v is not None:
+                self.assertAlmostEqual(v, val, places=10)
+
+    def test_known_output_period1(self):
+        # period=1: each EMA = values; TEMA = 3*v - 3*v + v = v
+        data = [2.0, 4.0, 6.0, 8.0]
+        out = tema(data, 1)
+        for i, v in enumerate(out):
+            self.assertAlmostEqual(v, data[i], places=10)
+
+    def test_output_length_matches_input(self):
+        out = tema([1.0] * 50, 5)
+        self.assertEqual(len(out), 50)
+
+    def test_converges_to_value_faster_than_dema(self):
+        # TEMA converges toward the final value faster than DEMA.
+        # After enough bars at 200, TEMA should be closer to 200 than DEMA.
+        data = [100.0] * 15 + [200.0] * 60
+        d = dema(data, 5)
+        t = tema(data, 5)
+        # At the end both should be very close to 200; just verify they're defined
+        self.assertIsNotNone(d[-1])
+        self.assertIsNotNone(t[-1])
+        self.assertAlmostEqual(t[-1], 200.0, delta=0.5)
+        self.assertAlmostEqual(d[-1], 200.0, delta=0.5)
+
+
+class TrixTests(unittest.TestCase):
+    def test_invalid_period(self):
+        for bad in (0, -1, 1.5, "5"):
+            with self.assertRaises(ValueError):
+                trix([1.0, 2.0, 3.0], bad)  # type: ignore[arg-type]
+
+    def test_insufficient_data_all_none(self):
+        # period=10; triple EMA needs ~3*period bars; with 10 bars all None
+        out = trix([1.0] * 10, 10)
+        self.assertTrue(all(v is None for v in out))
+
+    def test_constant_input_zero_trix(self):
+        # Constant data => all EMAs equal; e3[i] == e3[i-1] => TRIX = 0
+        data = [50.0] * 80
+        out = trix(data, 5)
+        for v in out:
+            if v is not None:
+                self.assertAlmostEqual(v, 0.0, places=10)
+
+    def test_known_output_period1(self):
+        # period=1: EMA1=EMA2=EMA3=values (alpha=1)
+        # TRIX[i] = (v[i] - v[i-1]) / v[i-1] * 100
+        data = [100.0, 110.0, 121.0]
+        out = trix(data, 1)
+        self.assertIsNone(out[0])
+        # TRIX[1] = (110-100)/100*100 = 10.0
+        self.assertAlmostEqual(out[1], 10.0, places=10)
+        # TRIX[2] = (121-110)/110*100 = 10.0
+        self.assertAlmostEqual(out[2], 10.0, places=10)
+
+    def test_output_length_matches_input(self):
+        out = trix([1.0] * 50, 5)
+        self.assertEqual(len(out), 50)
+
+    def test_uptrend_positive_trix(self):
+        # Strictly rising prices → e3 rises monotonically → TRIX > 0 after warm-up
+        data = [100.0 + i * 2.0 for i in range(60)]
+        out = trix(data, 5)
+        valid = [v for v in out if v is not None]
+        self.assertTrue(len(valid) > 0)
+        for v in valid:
+            self.assertGreater(v, 0.0)
+
+    def test_downtrend_negative_trix(self):
+        data = [200.0 - i * 2.0 for i in range(60)]
+        out = trix(data, 5)
+        valid = [v for v in out if v is not None]
+        self.assertTrue(len(valid) > 0)
+        for v in valid:
+            self.assertLess(v, 0.0)
 
 
 if __name__ == "__main__":

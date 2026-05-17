@@ -277,6 +277,118 @@ def is_descending_triangle(bars: Sequence[Bar]) -> int:
     return 0
 
 
+def is_bullish_flag(bars: Sequence[Bar]) -> int:
+    """Return +1 if the latest 20-bar window shows a Bullish Flag, else 0.
+
+    Requires len(bars) >= 20.
+    Looks at the last 20 bars:
+      - pole: first half [n-20, n-11]
+      - flag: second half [n-10, n-1]
+      - pole_bull  = b[n-11].close > b[n-20].close  (upward pole)
+      - tight_flag = flag_rng < pole_rng * 0.45
+      - pole_rng   > pole_lo * 0.01
+    Matches cpp/ chart_patterns.cpp BullishFlag rule.
+    """
+    n = len(bars)
+    if n < 20:
+        return 0
+    pole_lo  = _min_range(bars, n - 20, n - 11)
+    pole_hi  = _max_range(bars, n - 20, n - 11)
+    pole_rng = pole_hi - pole_lo
+    flag_hi  = _max_range(bars, n - 10, n - 1)
+    flag_lo  = _min_range(bars, n - 10, n - 1)
+    flag_rng = flag_hi - flag_lo
+    pole_bull  = bars[n - 11].close > bars[n - 20].close
+    tight_flag = flag_rng < pole_rng * 0.45
+    if pole_bull and tight_flag and pole_rng > pole_lo * 0.01:
+        return 1
+    return 0
+
+
+def is_bearish_flag(bars: Sequence[Bar]) -> int:
+    """Return -1 if the latest 20-bar window shows a Bearish Flag, else 0.
+
+    Requires len(bars) >= 20.
+    Looks at the last 20 bars:
+      - pole: first half [n-20, n-11]
+      - flag: second half [n-10, n-1]
+      - pole_bear  = b[n-11].close < b[n-20].close  (downward pole)
+      - tight_flag = flag_rng < pole_rng * 0.45
+      - pole_rng   > pole_lo * 0.01
+    Matches cpp/ chart_patterns.cpp BearishFlag rule.
+    """
+    n = len(bars)
+    if n < 20:
+        return 0
+    pole_lo  = _min_range(bars, n - 20, n - 11)
+    pole_hi  = _max_range(bars, n - 20, n - 11)
+    pole_rng = pole_hi - pole_lo
+    flag_rng = _max_range(bars, n - 10, n - 1) - _min_range(bars, n - 10, n - 1)
+    pole_bear  = bars[n - 11].close < bars[n - 20].close
+    tight_flag = flag_rng < pole_rng * 0.45
+    if pole_bear and tight_flag and pole_rng > pole_lo * 0.01:
+        return -1
+    return 0
+
+
+def is_head_and_shoulders(bars: Sequence[Bar]) -> int:
+    """Return -1 if the latest 40-bar window shows a Head and Shoulders, else 0.
+
+    Requires len(bars) >= 40.
+    Uses the last 40 bars; let s = n - 40:
+      - ls       = max high in [s, s+12]      (left shoulder)
+      - h        = max high in [s+13, s+26]   (head)
+      - rs       = max high in [s+27, n-1]    (right shoulder)
+      - neckline = min(min_low[s..s+12], min_low[s+27..n-1])
+      - h > ls*1.01 and h > rs*1.01
+      - |ls - rs| / ((ls + rs) / 2) < 0.07   (shoulders nearly equal)
+      - bars[n-1].close < neckline
+    Matches cpp/ chart_patterns.cpp HeadAndShoulders rule.
+    """
+    n = len(bars)
+    if n < 40:
+        return 0
+    s = n - 40
+    ls = _max_range(bars, s,      s + 12)
+    h  = _max_range(bars, s + 13, s + 26)
+    rs = _max_range(bars, s + 27, n - 1)
+    neckline = min(_min_range(bars, s, s + 12), _min_range(bars, s + 27, n - 1))
+    if (h > ls * 1.01 and h > rs * 1.01
+            and abs(ls - rs) / (ls + rs) * 2 < 0.07
+            and bars[n - 1].close < neckline):
+        return -1
+    return 0
+
+
+def is_inverse_head_and_shoulders(bars: Sequence[Bar]) -> int:
+    """Return +1 if the latest 40-bar window shows an Inverse Head and Shoulders, else 0.
+
+    Requires len(bars) >= 40.
+    Uses the last 40 bars; let s = n - 40:
+      - ls       = min low in [s, s+12]       (left shoulder)
+      - h        = min low in [s+13, s+26]    (head — lowest trough)
+      - rs       = min low in [s+27, n-1]     (right shoulder)
+      - neckline = max(max_high[s..s+12], max_high[s+27..n-1])
+      - h < ls*0.99 and h < rs*0.99
+      - |ls - rs| / ((ls + rs) / 2) < 0.07   (shoulders nearly equal)
+      - bars[n-1].close > neckline
+    Matches cpp/ chart_patterns.cpp InverseHeadAndShoulders rule.
+    """
+    n = len(bars)
+    if n < 40:
+        return 0
+    s = n - 40
+    ls = _min_range(bars, s,      s + 12)
+    h  = _min_range(bars, s + 13, s + 26)
+    rs = _min_range(bars, s + 27, n - 1)
+    neckline = max(_max_range(bars, s, s + 12), _max_range(bars, s + 27, n - 1))
+    if (h < ls * 0.99 and h < rs * 0.99
+            and abs(ls - rs) / (ls + rs) * 2 < 0.07
+            and bars[n - 1].close > neckline):
+        return 1
+    return 0
+
+
 @dataclass
 class PatternMatch:
     bar_index: int
@@ -318,4 +430,14 @@ def scan_patterns(bars: Sequence[Bar]) -> list[PatternMatch]:
             out.append(PatternMatch(last, "double_top", s))
         if (s := is_double_bottom(bars)):
             out.append(PatternMatch(last, "double_bottom", s))
+    if n >= 20:
+        if (s := is_bullish_flag(bars)):
+            out.append(PatternMatch(last, "bullish_flag", s))
+        if (s := is_bearish_flag(bars)):
+            out.append(PatternMatch(last, "bearish_flag", s))
+    if n >= 40:
+        if (s := is_head_and_shoulders(bars)):
+            out.append(PatternMatch(last, "head_and_shoulders", s))
+        if (s := is_inverse_head_and_shoulders(bars)):
+            out.append(PatternMatch(last, "inverse_head_and_shoulders", s))
     return out

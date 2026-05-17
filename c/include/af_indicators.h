@@ -78,4 +78,26 @@ af_error_t af_keltner(const double *high, const double *low, const double *close
                       size_t n, size_t ema_period, size_t atr_period, double mult,
                       double *upper, double *middle, double *lower);
 
+/* HMA: Hull Moving Average.
+   half = (int)sqrt(period/2), clamped to >=1;
+   sq   = (int)sqrt(period),   clamped to >=2.
+   raw[i] = 2*WMA(half)[i] - WMA(period)[i]; out = WMA(raw, sq).
+   Matches cpp/ af_hma exactly. */
+af_error_t af_hma(const double *src, size_t n, size_t period, double *out);
+
+/* DEMA: Double Exponential Moving Average.
+   out[i] = 2*EMA1[i] - EMA2[i]  where EMA2 = EMA(EMA1, period).
+   Matches cpp/ af_dema exactly. */
+af_error_t af_dema(const double *src, size_t n, size_t period, double *out);
+
+/* TEMA: Triple Exponential Moving Average.
+   out[i] = 3*EMA1[i] - 3*EMA2[i] + EMA3[i].
+   Matches cpp/ af_tema exactly. */
+af_error_t af_tema(const double *src, size_t n, size_t period, double *out);
+
+/* TRIX: triple-smoothed EMA rate-of-change * 100.
+   out[i] = (EMA3[i] - EMA3[i-1]) / EMA3[i-1] * 100.
+   Matches cpp/ af_trix (trix output only; signal line not exposed here). */
+af_error_t af_trix(const double *src, size_t n, size_t period, double *out);
+
 #endif /* AF_INDICATORS_H */

@@ -1,5 +1,6 @@
 """SMA / EMA / RSI / ATR / MACD / Bollinger / Stochastic / OBV / ADX /
-WMA / CCI / Williams %R / ROC / MFI / VWAP / Keltner — same math as the cpp/ reference.
+WMA / CCI / Williams %R / ROC / MFI / VWAP / Keltner / HMA / DEMA / TEMA / TRIX
+— same math as the cpp/ reference.
 
 API:
     sma(values, period) -> list[float | None]
@@ -18,6 +19,10 @@ API:
     mfi(highs, lows, closes, volumes, period) -> list[float | None]
     vwap(highs, lows, closes, volumes) -> list[float | None]
     keltner(highs, lows, closes, ema_period, atr_period, mult) -> tuple[list[float | None], list[float | None], list[float | None]]
+    hma(values, period) -> list[float | None]
+    dema(values, period) -> list[float | None]
+    tema(values, period) -> list[float | None]
+    trix(values, period) -> list[float | None]
 
 Indices where the indicator is not yet defined come back as None.
 Raises ValueError for invalid args (period <= 0, mismatched lengths, etc.).
@@ -25,6 +30,7 @@ Raises ValueError for invalid args (period <= 0, mismatched lengths, etc.).
 
 from __future__ import annotations
 
+import math
 from typing import Sequence
 
 
@@ -264,11 +270,12 @@ def obv(closes: Sequence[float], volumes: Sequence[float]) -> list[float]:
     return out
 
 
-def wma(values: Sequence[float], period: int) -> list[float | None]:
+def wma(values: Sequence[float | None], period: int) -> list[float | None]:
     """Weighted moving average.
 
     Most recent bar gets weight = period; oldest in window gets weight = 1.
     Sum of weights = period*(period+1)/2.
+    Handles None entries: any window containing a None yields None output.
     Matches cpp/ af_wma: defined from index period-1 onwards.
     Raises ValueError for invalid period.
     """
@@ -278,10 +285,16 @@ def wma(values: Sequence[float], period: int) -> list[float | None]:
     wsum = period * (period + 1) / 2.0
     for i in range(period - 1, n):
         s = 0.0
+        valid = True
         for j in range(period):
+            v = values[i - (period - 1 - j)]
+            if v is None:
+                valid = False
+                break
             # weight of oldest element (j=0) is 1, most recent (j=period-1) is period
-            s += values[i - (period - 1 - j)] * (j + 1)
-        out[i] = s / wsum
+            s += v * (j + 1)
+        if valid:
+            out[i] = s / wsum
     return out
 
 
@@ -524,3 +537,94 @@ def adx(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
             out_adx[i] = prev_adx * (1 - alpha) + dx * alpha  # type: ignore[operator]
 
     return out_adx, out_pdi, out_mdi
+
+
+def hma(values: Sequence[float], period: int) -> list[float | None]:
+    """Hull Moving Average.
+
+    Matches cpp/ af_hma:
+      half = int(sqrt(period / 2.0)); clamped to >= 1
+      sq   = int(sqrt(period));       clamped to >= 2
+      raw[i] = 2 * WMA(half)[i] - WMA(period)[i]  (None where either is None)
+      HMA    = WMA(raw, sq)
+    Raises ValueError for period < 2.
+    """
+    _check_period(period)
+    if period < 2:
+        raise ValueError(f"hma requires period >= 2, got {period!r}")
+    n = len(values)
+    half = int(math.sqrt(period / 2.0))
+    if half < 1:
+        half = 1
+    sq = int(math.sqrt(float(period)))
+    if sq < 2:
+        sq = 2
+    wh = wma(values, half)
+    wf = wma(values, period)
+    raw: list[float | None] = [
+        None if (wh[i] is None or wf[i] is None) else 2.0 * wh[i] - wf[i]  # type: ignore[operator]
+        for i in range(n)
+    ]
+    return wma(raw, sq)
+
+
+def dema(values: Sequence[float], period: int) -> list[float | None]:
+    """Double Exponential Moving Average.
+
+    DEMA = 2 * EMA1 - EMA(EMA1, period).
+    Matches cpp/ af_dema.
+    Raises ValueError for invalid period.
+    """
+    _check_period(period)
+    n = len(values)
+    e1 = ema(values, period)
+    e2 = ema(e1, period)
+    return [
+        None if (e1[i] is None or e2[i] is None) else 2.0 * e1[i] - e2[i]  # type: ignore[operator]
+        for i in range(n)
+    ]
+
+
+def tema(values: Sequence[float], period: int) -> list[float | None]:
+    """Triple Exponential Moving Average.
+
+    TEMA = 3 * EMA1 - 3 * EMA2 + EMA3.
+    Matches cpp/ af_tema.
+    Raises ValueError for invalid period.
+    """
+    _check_period(period)
+    n = len(values)
+    e1 = ema(values, period)
+    e2 = ema(e1, period)
+    e3 = ema(e2, period)
+    return [
+        None if (e1[i] is None or e2[i] is None or e3[i] is None)
+        else 3.0 * e1[i] - 3.0 * e2[i] + e3[i]  # type: ignore[operator]
+        for i in range(n)
+    ]
+
+
+def trix(values: Sequence[float], period: int) -> list[float | None]:
+    """Triple-smoothed EMA Rate of Change (TRIX line only).
+
+    Triple-smooth the input with EMA(period) three times; then compute:
+      TRIX[i] = (e3[i] - e3[i-1]) / e3[i-1] * 100
+    where |e3[i-1]| > EPSILON, else None.
+    Defined from index 1 onwards where e3 is valid.
+    Matches cpp/ af_trix (signal line omitted; just returns the TRIX line).
+    Raises ValueError for invalid period.
+    """
+    _check_period(period)
+    n = len(values)
+    out: list[float | None] = [None] * n
+    EPSILON = 1e-10
+    e1 = ema(values, period)
+    e2 = ema(e1, period)
+    e3 = ema(e2, period)
+    for i in range(1, n):
+        if e3[i] is None or e3[i - 1] is None:
+            out[i] = None
+        elif abs(e3[i - 1]) > EPSILON:  # type: ignore[arg-type]
+            out[i] = (e3[i] - e3[i - 1]) / e3[i - 1] * 100.0  # type: ignore[operator]
+        # else leave as None (|prev| <= EPSILON)
+    return out

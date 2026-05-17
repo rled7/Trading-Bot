@@ -382,6 +382,256 @@ static void test_descending_triangle_positive(void) {
     CHK(af_is_descending_triangle(bars, 20) == -1);
 }
 
+/* ── Head and Shoulders ─────────────────────────────────────────────── */
+static void mk_hs_bars(af_bar_t *bars, size_t n,
+                       double ls_hi, double head_hi, double rs_hi,
+                       double valley_lo, double close_last)
+{
+    /* Fill 40 bars: segments [0..12]=left shoulder, [13..26]=head, [27..39]=right.
+       For each segment set high to the peak, low to valley_lo, close = 0.5*(hi+lo). */
+    for (size_t i = 0; i < n; ++i) {
+        double hi;
+        if (i <= 12)      hi = ls_hi;
+        else if (i <= 26) hi = head_hi;
+        else              hi = rs_hi;
+        bars[i].high   = hi;
+        bars[i].low    = valley_lo;
+        bars[i].open   = (hi + valley_lo) / 2.0;
+        bars[i].close  = (hi + valley_lo) / 2.0;
+        bars[i].volume = 1;
+        bars[i].spread = 0;
+        bars[i].timestamp = (int64_t)i;
+    }
+    /* Set the final bar's close to the requested value. */
+    bars[n - 1].close = close_last;
+}
+
+static void test_head_and_shoulders_positive(void) {
+    /* ls=100, head=110, rs=100, valley=80, close=75 < neckline(=80).
+       h > ls*1.01=101 ✓, h > rs*1.01=101 ✓, sym=(100-100)/(200)*2=0 < 0.07 ✓,
+       close=75 < neckline=80 ✓ → returns -1. */
+    af_bar_t bars[40] = {0};
+    mk_hs_bars(bars, 40, 100.0, 110.0, 100.0, 80.0, 75.0);
+    CHK(af_is_head_and_shoulders(bars, 40) == -1);
+}
+
+static void test_head_and_shoulders_below_min_bars(void) {
+    af_bar_t bars[30] = {0};
+    for (int i = 0; i < 30; ++i) mk_flat(&bars[i], 100.0);
+    CHK(af_is_head_and_shoulders(bars, 30) == 0);
+}
+
+static void test_head_and_shoulders_head_not_higher(void) {
+    /* head = ls = rs (symmetric but head not higher than shoulders). */
+    af_bar_t bars[40] = {0};
+    mk_hs_bars(bars, 40, 100.0, 100.0, 100.0, 80.0, 75.0);
+    CHK(af_is_head_and_shoulders(bars, 40) == 0);
+}
+
+/* ── Inverse Head and Shoulders ─────────────────────────────────────── */
+static void mk_ihs_bars(af_bar_t *bars, size_t n,
+                        double ls_lo, double head_lo, double rs_lo,
+                        double peak_hi, double close_last)
+{
+    for (size_t i = 0; i < n; ++i) {
+        double lo;
+        if (i <= 12)      lo = ls_lo;
+        else if (i <= 26) lo = head_lo;
+        else              lo = rs_lo;
+        bars[i].low    = lo;
+        bars[i].high   = peak_hi;
+        bars[i].open   = (peak_hi + lo) / 2.0;
+        bars[i].close  = (peak_hi + lo) / 2.0;
+        bars[i].volume = 1;
+        bars[i].spread = 0;
+        bars[i].timestamp = (int64_t)i;
+    }
+    bars[n - 1].close = close_last;
+}
+
+static void test_inverse_head_and_shoulders_positive(void) {
+    /* ls=100, head=90, rs=100, peak=120, close=122 > neckline(=120).
+       h=90 < ls*0.99=99 ✓, h < rs*0.99=99 ✓, sym=0 < 0.07 ✓,
+       close=122 > neckline=120 ✓ → returns +1. */
+    af_bar_t bars[40] = {0};
+    mk_ihs_bars(bars, 40, 100.0, 90.0, 100.0, 120.0, 122.0);
+    CHK(af_is_inverse_head_and_shoulders(bars, 40) == 1);
+}
+
+static void test_inverse_head_and_shoulders_below_min_bars(void) {
+    af_bar_t bars[30] = {0};
+    for (int i = 0; i < 30; ++i) mk_flat(&bars[i], 100.0);
+    CHK(af_is_inverse_head_and_shoulders(bars, 30) == 0);
+}
+
+static void test_inverse_head_and_shoulders_head_not_lower(void) {
+    /* head == ls == rs (not lower). */
+    af_bar_t bars[40] = {0};
+    mk_ihs_bars(bars, 40, 100.0, 100.0, 100.0, 120.0, 122.0);
+    CHK(af_is_inverse_head_and_shoulders(bars, 40) == 0);
+}
+
+/* ── Bullish Flag ────────────────────────────────────────────────────── */
+static void test_bullish_flag_positive(void) {
+    /* 20 bars: pole (first 10): strong bullish move; flag (last 10): tight range. */
+    af_bar_t bars[20] = {0};
+    /* Pole: rising from 100 to 120 (range ~20). */
+    for (int i = 0; i < 10; ++i) {
+        double p = 100.0 + i * 2.0;
+        bars[i].open  = p;
+        bars[i].close = p + 1.8;
+        bars[i].high  = p + 2.0;
+        bars[i].low   = p - 0.2;
+        bars[i].volume = 1;
+    }
+    /* Flag: tight consolidation ~118–120 (range ~2 < 20*0.45=9). */
+    for (int i = 10; i < 20; ++i) {
+        bars[i].open  = 119.0;
+        bars[i].close = 119.5;
+        bars[i].high  = 120.0;
+        bars[i].low   = 118.0;
+        bars[i].volume = 1;
+    }
+    CHK(af_is_bullish_flag(bars, 20) == 1);
+}
+
+static void test_bullish_flag_below_min_bars(void) {
+    af_bar_t bars[15] = {0};
+    for (int i = 0; i < 15; ++i) mk_flat(&bars[i], 100.0);
+    CHK(af_is_bullish_flag(bars, 15) == 0);
+}
+
+static void test_bullish_flag_no_match_bearish_pole(void) {
+    /* Bearish pole: close of bar n-11 < open → pole_bull = false. */
+    af_bar_t bars[20] = {0};
+    for (int i = 0; i < 10; ++i) {
+        double p = 120.0 - i * 2.0;   /* falling */
+        bars[i].open  = p;
+        bars[i].close = p - 1.8;
+        bars[i].high  = p + 0.2;
+        bars[i].low   = p - 2.0;
+        bars[i].volume = 1;
+    }
+    for (int i = 10; i < 20; ++i) {
+        bars[i].open = 100.0; bars[i].close = 100.5;
+        bars[i].high = 101.0; bars[i].low   = 99.0;
+        bars[i].volume = 1;
+    }
+    CHK(af_is_bullish_flag(bars, 20) == 0);
+}
+
+/* ── Bearish Flag ────────────────────────────────────────────────────── */
+static void test_bearish_flag_positive(void) {
+    /* 20 bars: pole (first 10): strong bearish move; flag (last 10): tight range. */
+    af_bar_t bars[20] = {0};
+    /* Pole: falling from 120 to 100 (range ~20). */
+    for (int i = 0; i < 10; ++i) {
+        double p = 120.0 - i * 2.0;
+        bars[i].open  = p;
+        bars[i].close = p - 1.8;
+        bars[i].high  = p + 0.2;
+        bars[i].low   = p - 2.0;
+        bars[i].volume = 1;
+    }
+    /* Flag: tight consolidation ~100–102 (range ~2 < 20*0.45=9). */
+    for (int i = 10; i < 20; ++i) {
+        bars[i].open  = 101.0;
+        bars[i].close = 100.5;
+        bars[i].high  = 102.0;
+        bars[i].low   = 100.0;
+        bars[i].volume = 1;
+    }
+    CHK(af_is_bearish_flag(bars, 20) == -1);
+}
+
+static void test_bearish_flag_below_min_bars(void) {
+    af_bar_t bars[15] = {0};
+    for (int i = 0; i < 15; ++i) mk_flat(&bars[i], 100.0);
+    CHK(af_is_bearish_flag(bars, 15) == 0);
+}
+
+static void test_bearish_flag_no_match_bullish_pole(void) {
+    /* Bullish pole: close of bar n-11 > close of bar n-20 → pole_bear = false. */
+    af_bar_t bars[20] = {0};
+    for (int i = 0; i < 10; ++i) {
+        double p = 100.0 + i * 2.0;   /* rising */
+        bars[i].open  = p;
+        bars[i].close = p + 1.8;
+        bars[i].high  = p + 2.0;
+        bars[i].low   = p - 0.2;
+        bars[i].volume = 1;
+    }
+    for (int i = 10; i < 20; ++i) {
+        bars[i].open = 118.0; bars[i].close = 118.5;
+        bars[i].high = 119.0; bars[i].low   = 117.0;
+        bars[i].volume = 1;
+    }
+    CHK(af_is_bearish_flag(bars, 20) == 0);
+}
+
+/* ── Scan with new chart patterns ────────────────────────────────────── */
+static void test_scan_head_and_shoulders(void) {
+    /* Verify scan_patterns emits head_and_shoulders at bar n-1.
+       Use a large output buffer so chart patterns aren't crowded out. */
+    af_bar_t bars[40] = {0};
+    mk_hs_bars(bars, 40, 100.0, 110.0, 100.0, 80.0, 75.0);
+    af_pattern_match_t out[64];
+    size_t n = af_scan_patterns(bars, 40, out, 64);
+    int saw = 0;
+    for (size_t i = 0; i < n && i < 64; ++i)
+        if (out[i].bar_index == 39 && strcmp(out[i].name, "head_and_shoulders") == 0)
+            saw = 1;
+    CHK(saw);
+}
+
+static void test_scan_inverse_head_and_shoulders(void) {
+    af_bar_t bars[40] = {0};
+    mk_ihs_bars(bars, 40, 100.0, 90.0, 100.0, 120.0, 122.0);
+    af_pattern_match_t out[64];
+    size_t n = af_scan_patterns(bars, 40, out, 64);
+    int saw = 0;
+    for (size_t i = 0; i < n && i < 64; ++i)
+        if (out[i].bar_index == 39 && strcmp(out[i].name, "inverse_head_and_shoulders") == 0)
+            saw = 1;
+    CHK(saw);
+}
+
+static void test_scan_bullish_flag(void) {
+    af_bar_t bars[20] = {0};
+    for (int i = 0; i < 10; ++i) {
+        double p = 100.0 + i * 2.0;
+        bars[i].open=p; bars[i].close=p+1.8; bars[i].high=p+2.0; bars[i].low=p-0.2; bars[i].volume=1;
+    }
+    for (int i = 10; i < 20; ++i) {
+        bars[i].open=119.0; bars[i].close=119.5; bars[i].high=120.0; bars[i].low=118.0; bars[i].volume=1;
+    }
+    af_pattern_match_t out[64];
+    size_t n = af_scan_patterns(bars, 20, out, 64);
+    int saw = 0;
+    for (size_t i = 0; i < n && i < 64; ++i)
+        if (out[i].bar_index == 19 && strcmp(out[i].name, "bullish_flag") == 0)
+            saw = 1;
+    CHK(saw);
+}
+
+static void test_scan_bearish_flag(void) {
+    af_bar_t bars[20] = {0};
+    for (int i = 0; i < 10; ++i) {
+        double p = 120.0 - i * 2.0;
+        bars[i].open=p; bars[i].close=p-1.8; bars[i].high=p+0.2; bars[i].low=p-2.0; bars[i].volume=1;
+    }
+    for (int i = 10; i < 20; ++i) {
+        bars[i].open=101.0; bars[i].close=100.5; bars[i].high=102.0; bars[i].low=100.0; bars[i].volume=1;
+    }
+    af_pattern_match_t out[64];
+    size_t n = af_scan_patterns(bars, 20, out, 64);
+    int saw = 0;
+    for (size_t i = 0; i < n && i < 64; ++i)
+        if (out[i].bar_index == 19 && strcmp(out[i].name, "bearish_flag") == 0)
+            saw = 1;
+    CHK(saw);
+}
+
 /* ── Runner ───────────────────────────────────────────────────────── */
 void test_patterns_run(int *total_passed, int *total_failed) {
     test_doji_match();
@@ -443,6 +693,27 @@ void test_patterns_run(int *total_passed, int *total_failed) {
     test_double_bottom_positive();
     test_ascending_triangle_positive();
     test_descending_triangle_positive();
+
+    test_head_and_shoulders_positive();
+    test_head_and_shoulders_below_min_bars();
+    test_head_and_shoulders_head_not_higher();
+
+    test_inverse_head_and_shoulders_positive();
+    test_inverse_head_and_shoulders_below_min_bars();
+    test_inverse_head_and_shoulders_head_not_lower();
+
+    test_bullish_flag_positive();
+    test_bullish_flag_below_min_bars();
+    test_bullish_flag_no_match_bearish_pole();
+
+    test_bearish_flag_positive();
+    test_bearish_flag_below_min_bars();
+    test_bearish_flag_no_match_bullish_pole();
+
+    test_scan_head_and_shoulders();
+    test_scan_inverse_head_and_shoulders();
+    test_scan_bullish_flag();
+    test_scan_bearish_flag();
 
     *total_passed += g_passed;
     *total_failed += g_failed;

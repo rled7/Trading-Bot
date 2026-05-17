@@ -1,9 +1,11 @@
+import math
 import unittest
 
 from algoforge import Bar
 from algoforge.patterns import (
     is_doji, is_hammer, is_engulfing, is_marubozu, is_pin_bar,
     is_morning_star, is_evening_star, is_three_white_soldiers, is_three_black_crows,
+    is_bullish_flag, is_bearish_flag, is_head_and_shoulders, is_inverse_head_and_shoulders,
     scan_patterns,
 )
 
@@ -249,6 +251,259 @@ class ThreeBlackCrowsTests(unittest.TestCase):
         self.assertEqual(is_three_black_crows(b0, b1, b2), 0)
 
 
+class BullishFlagTests(unittest.TestCase):
+    def _make_bullish_flag_bars(self):
+        """Create 20 bars that form a clear bullish flag.
+
+        Pole (bars 0–9): strong upward move (close[9] >> close[0]).
+        Flag (bars 10–19): tight sideways consolidation.
+        """
+        bars = []
+        # Pole: rise from 100 to 120 (10 bars)
+        for i in range(10):
+            price = 100.0 + i * 2.0
+            bars.append(Bar(timestamp=i, open=price - 0.5, high=price + 0.5,
+                            low=price - 0.6, close=price, volume=1))
+        # Flag: tight consolidation around 120 (10 bars, range ~0.4)
+        for i in range(10):
+            price = 120.0 + (i % 2) * 0.2
+            bars.append(Bar(timestamp=10 + i, open=price, high=price + 0.2,
+                            low=price - 0.2, close=price, volume=1))
+        return bars
+
+    def test_positive_match(self):
+        bars = self._make_bullish_flag_bars()
+        self.assertEqual(is_bullish_flag(bars), 1)
+
+    def test_below_min_bars_returns_zero(self):
+        bars = self._make_bullish_flag_bars()
+        self.assertEqual(is_bullish_flag(bars[:19]), 0)
+        self.assertEqual(is_bullish_flag([]), 0)
+
+    def test_no_match_bearish_pole(self):
+        """Pole goes down, so pole_bull = False → no match."""
+        bars = []
+        # Falling pole
+        for i in range(10):
+            price = 120.0 - i * 2.0
+            bars.append(Bar(timestamp=i, open=price + 0.5, high=price + 0.6,
+                            low=price - 0.5, close=price, volume=1))
+        # Tight flag
+        for i in range(10):
+            price = 100.0 + (i % 2) * 0.2
+            bars.append(Bar(timestamp=10 + i, open=price, high=price + 0.2,
+                            low=price - 0.2, close=price, volume=1))
+        self.assertEqual(is_bullish_flag(bars), 0)
+
+    def test_no_match_wide_flag(self):
+        """Flag range >= pole_rng * 0.45 → no match."""
+        bars = []
+        # Pole: 10 bars, rise 100->120, pole_rng ~20
+        for i in range(10):
+            price = 100.0 + i * 2.0
+            bars.append(Bar(timestamp=i, open=price - 0.5, high=price + 0.5,
+                            low=price - 0.6, close=price, volume=1))
+        # Wide flag: range = 15 which is > 20*0.45=9
+        for i in range(10):
+            price = 115.0 + (i % 2) * 15.0
+            bars.append(Bar(timestamp=10 + i, open=price, high=price + 1.0,
+                            low=price - 1.0, close=price, volume=1))
+        self.assertEqual(is_bullish_flag(bars), 0)
+
+
+class BearishFlagTests(unittest.TestCase):
+    def _make_bearish_flag_bars(self):
+        """Create 20 bars that form a clear bearish flag.
+
+        Pole (bars 0–9): strong downward move (close[9] << close[0]).
+        Flag (bars 10–19): tight sideways consolidation.
+        """
+        bars = []
+        # Pole: fall from 120 to 100 (10 bars)
+        for i in range(10):
+            price = 120.0 - i * 2.0
+            bars.append(Bar(timestamp=i, open=price + 0.5, high=price + 0.6,
+                            low=price - 0.5, close=price, volume=1))
+        # Flag: tight consolidation around 100 (10 bars)
+        for i in range(10):
+            price = 100.0 + (i % 2) * 0.2
+            bars.append(Bar(timestamp=10 + i, open=price, high=price + 0.2,
+                            low=price - 0.2, close=price, volume=1))
+        return bars
+
+    def test_positive_match(self):
+        bars = self._make_bearish_flag_bars()
+        self.assertEqual(is_bearish_flag(bars), -1)
+
+    def test_below_min_bars_returns_zero(self):
+        bars = self._make_bearish_flag_bars()
+        self.assertEqual(is_bearish_flag(bars[:19]), 0)
+        self.assertEqual(is_bearish_flag([]), 0)
+
+    def test_no_match_bullish_pole(self):
+        """Pole goes up, so pole_bear = False → no match."""
+        bars = []
+        for i in range(10):
+            price = 100.0 + i * 2.0
+            bars.append(Bar(timestamp=i, open=price - 0.5, high=price + 0.5,
+                            low=price - 0.6, close=price, volume=1))
+        for i in range(10):
+            price = 120.0 + (i % 2) * 0.2
+            bars.append(Bar(timestamp=10 + i, open=price, high=price + 0.2,
+                            low=price - 0.2, close=price, volume=1))
+        self.assertEqual(is_bearish_flag(bars), 0)
+
+    def test_no_match_wide_flag(self):
+        """Flag range >= pole_rng * 0.45 → no match."""
+        bars = []
+        # Pole: fall 120->100, pole_rng ~20
+        for i in range(10):
+            price = 120.0 - i * 2.0
+            bars.append(Bar(timestamp=i, open=price + 0.5, high=price + 0.6,
+                            low=price - 0.5, close=price, volume=1))
+        # Wide flag: range = 15 > 20*0.45=9
+        for i in range(10):
+            price = 100.0 + (i % 2) * 15.0
+            bars.append(Bar(timestamp=10 + i, open=price, high=price + 1.0,
+                            low=price - 1.0, close=price, volume=1))
+        self.assertEqual(is_bearish_flag(bars), 0)
+
+
+class HeadAndShouldersTests(unittest.TestCase):
+    def _make_has_bars(self):
+        """Create 40 bars with a clear H&S pattern.
+
+        Layout:
+          - Left shoulder  [0–12]:  highs peak at ~105
+          - Head           [13–26]: highs peak at ~115 (>105*1.01)
+          - Right shoulder [27–39]: highs peak at ~104 (close to left shoulder)
+          - Neckline: lows around 98 (below shoulders)
+          - Last close: 96 (below neckline)
+        """
+        bars = []
+        # Left shoulder: peak ~105
+        for i in range(13):
+            frac = i / 12.0
+            peak_h = 100.0 + 5.0 * math.sin(frac * math.pi)
+            bars.append(Bar(timestamp=i, open=peak_h - 1.0, high=peak_h,
+                            low=98.0, close=peak_h - 0.5, volume=1))
+        # Head: peak ~115
+        for i in range(14):
+            frac = i / 13.0
+            peak_h = 100.0 + 15.0 * math.sin(frac * math.pi)
+            bars.append(Bar(timestamp=13 + i, open=peak_h - 1.0, high=peak_h,
+                            low=98.0, close=peak_h - 0.5, volume=1))
+        # Right shoulder: peak ~104.5, last close 96 (below neckline 98)
+        for i in range(13):
+            frac = i / 12.0
+            peak_h = 100.0 + 4.5 * math.sin(frac * math.pi)
+            close_val = 96.0 if i == 12 else peak_h - 0.5
+            bars.append(Bar(timestamp=27 + i, open=peak_h - 1.0, high=peak_h,
+                            low=98.0, close=close_val, volume=1))
+        return bars
+
+    def test_positive_match(self):
+        bars = self._make_has_bars()
+        self.assertEqual(len(bars), 40)
+        self.assertEqual(is_head_and_shoulders(bars), -1)
+
+    def test_below_min_bars_returns_zero(self):
+        bars = self._make_has_bars()
+        self.assertEqual(is_head_and_shoulders(bars[:39]), 0)
+        self.assertEqual(is_head_and_shoulders([]), 0)
+
+    def test_no_match_head_not_higher(self):
+        """Head equal to shoulders → h <= ls*1.01 → no match."""
+        bars = []
+        # All three sections have same max high ~105
+        for section in range(3):
+            start_idx = [0, 13, 27][section]
+            count = [13, 14, 13][section]
+            for i in range(count):
+                frac = i / (count - 1) if count > 1 else 0.5
+                peak_h = 100.0 + 5.0 * math.sin(frac * math.pi)
+                close_val = 96.0 if (section == 2 and i == count - 1) else peak_h - 0.5
+                bars.append(Bar(timestamp=start_idx + i, open=peak_h - 1.0, high=peak_h,
+                                low=98.0, close=close_val, volume=1))
+        self.assertEqual(is_head_and_shoulders(bars), 0)
+
+    def test_no_match_close_above_neckline(self):
+        """Last close above neckline → no match."""
+        bars = self._make_has_bars()
+        # Replace last bar with close above neckline (98)
+        last = bars[-1]
+        bars[-1] = Bar(timestamp=last.timestamp, open=last.open, high=last.high,
+                       low=last.low, close=99.0, volume=1)
+        self.assertEqual(is_head_and_shoulders(bars), 0)
+
+
+class InverseHeadAndShouldersTests(unittest.TestCase):
+    def _make_ihas_bars(self):
+        """Create 40 bars with a clear Inverse H&S pattern.
+
+        Layout:
+          - Left shoulder  [0–12]:  lows trough at ~95
+          - Head           [13–26]: lows trough at ~85 (< 95*0.99)
+          - Right shoulder [27–39]: lows trough at ~94.5
+          - Neckline: highs around 102
+          - Last close: 104 (above neckline)
+        """
+        bars = []
+        # Left shoulder: trough ~95
+        for i in range(13):
+            frac = i / 12.0
+            trough_l = 100.0 - 5.0 * math.sin(frac * math.pi)
+            bars.append(Bar(timestamp=i, open=trough_l + 1.0, high=102.0,
+                            low=trough_l, close=trough_l + 0.5, volume=1))
+        # Head: trough ~85
+        for i in range(14):
+            frac = i / 13.0
+            trough_l = 100.0 - 15.0 * math.sin(frac * math.pi)
+            bars.append(Bar(timestamp=13 + i, open=trough_l + 1.0, high=102.0,
+                            low=trough_l, close=trough_l + 0.5, volume=1))
+        # Right shoulder: trough ~94.5, last close 104 (above neckline 102)
+        for i in range(13):
+            frac = i / 12.0
+            trough_l = 100.0 - 4.5 * math.sin(frac * math.pi)
+            close_val = 104.0 if i == 12 else trough_l + 0.5
+            bars.append(Bar(timestamp=27 + i, open=trough_l + 1.0, high=102.0,
+                            low=trough_l, close=close_val, volume=1))
+        return bars
+
+    def test_positive_match(self):
+        bars = self._make_ihas_bars()
+        self.assertEqual(len(bars), 40)
+        self.assertEqual(is_inverse_head_and_shoulders(bars), 1)
+
+    def test_below_min_bars_returns_zero(self):
+        bars = self._make_ihas_bars()
+        self.assertEqual(is_inverse_head_and_shoulders(bars[:39]), 0)
+        self.assertEqual(is_inverse_head_and_shoulders([]), 0)
+
+    def test_no_match_head_not_lower(self):
+        """Head equal to shoulders → h >= ls*0.99 → no match."""
+        bars = []
+        # All three sections have same min low ~95
+        for section in range(3):
+            start_idx = [0, 13, 27][section]
+            count = [13, 14, 13][section]
+            for i in range(count):
+                frac = i / (count - 1) if count > 1 else 0.5
+                trough_l = 100.0 - 5.0 * math.sin(frac * math.pi)
+                close_val = 104.0 if (section == 2 and i == count - 1) else trough_l + 0.5
+                bars.append(Bar(timestamp=start_idx + i, open=trough_l + 1.0, high=102.0,
+                                low=trough_l, close=close_val, volume=1))
+        self.assertEqual(is_inverse_head_and_shoulders(bars), 0)
+
+    def test_no_match_close_below_neckline(self):
+        """Last close below neckline → no match."""
+        bars = self._make_ihas_bars()
+        last = bars[-1]
+        bars[-1] = Bar(timestamp=last.timestamp, open=last.open, high=last.high,
+                       low=last.low, close=100.0, volume=1)
+        self.assertEqual(is_inverse_head_and_shoulders(bars), 0)
+
+
 class ScanTests(unittest.TestCase):
     def test_collects_matches(self):
         bars = [
@@ -280,6 +535,52 @@ class ScanTests(unittest.TestCase):
         matches = scan_patterns(bars)
         names = {(m.bar_index, m.name) for m in matches}
         self.assertIn((2, "three_white_soldiers"), names)
+
+    def test_scan_detects_bullish_flag(self):
+        bars = []
+        for i in range(10):
+            price = 100.0 + i * 2.0
+            bars.append(Bar(timestamp=i, open=price - 0.5, high=price + 0.5,
+                            low=price - 0.6, close=price, volume=1))
+        for i in range(10):
+            price = 120.0 + (i % 2) * 0.2
+            bars.append(Bar(timestamp=10 + i, open=price, high=price + 0.2,
+                            low=price - 0.2, close=price, volume=1))
+        matches = scan_patterns(bars)
+        names = {m.name for m in matches}
+        self.assertIn("bullish_flag", names)
+
+    def test_scan_detects_bearish_flag(self):
+        bars = []
+        for i in range(10):
+            price = 120.0 - i * 2.0
+            bars.append(Bar(timestamp=i, open=price + 0.5, high=price + 0.6,
+                            low=price - 0.5, close=price, volume=1))
+        for i in range(10):
+            price = 100.0 + (i % 2) * 0.2
+            bars.append(Bar(timestamp=10 + i, open=price, high=price + 0.2,
+                            low=price - 0.2, close=price, volume=1))
+        matches = scan_patterns(bars)
+        names = {m.name for m in matches}
+        self.assertIn("bearish_flag", names)
+
+    def test_scan_new_chart_patterns_at_last_bar(self):
+        """New chart patterns should only fire at the last bar index."""
+        bars = []
+        for i in range(10):
+            price = 100.0 + i * 2.0
+            bars.append(Bar(timestamp=i, open=price - 0.5, high=price + 0.5,
+                            low=price - 0.6, close=price, volume=1))
+        for i in range(10):
+            price = 120.0 + (i % 2) * 0.2
+            bars.append(Bar(timestamp=10 + i, open=price, high=price + 0.2,
+                            low=price - 0.2, close=price, volume=1))
+        matches = scan_patterns(bars)
+        last = len(bars) - 1
+        for m in matches:
+            if m.name in ("bullish_flag", "bearish_flag",
+                          "head_and_shoulders", "inverse_head_and_shoulders"):
+                self.assertEqual(m.bar_index, last)
 
 
 if __name__ == "__main__":
