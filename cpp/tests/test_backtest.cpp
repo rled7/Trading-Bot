@@ -157,6 +157,47 @@ void test_backtest(TestRunner T) {
         CHK(!j.ok());
     });
 
+    T("BacktestEngine: same journal_run_id is idempotent across re-runs", []{
+        const char *db = "/tmp/af_test_journal_idem.db";
+        std::remove(db);
+        af::BTConfig cfg;
+        cfg.initial_capital   = 10000;
+        cfg.warmup_bars       = 200;
+        cfg.journal_db_path   = db;
+        cfg.journal_run_id    = "experiment_alpha";
+        auto bars = fetch_bars(600, 0.002);
+        int n_after_first = 0;
+        {
+            auto algo = af::make_trend_follower(21,50,22);
+            af::BacktestEngine bt(algo.get(), cfg);
+            auto r = bt.run(bars.data(), bars.size(), "EURUSD", AF_TF_H1);
+            if (r.total_trades() == 0) { std::remove(db); return; }
+            af::TradeJournal j(db);
+            n_after_first = j.row_count();
+            CHK_EQ(n_after_first, r.total_trades());
+            /* client_id is populated on every trade */
+            for (const auto &t : r.trades) CHK_FALSE(std::string(t.client_id).empty());
+        }
+        /* Re-run identical backtest into the same DB — row count must not grow. */
+        {
+            auto algo = af::make_trend_follower(21,50,22);
+            af::BacktestEngine bt(algo.get(), cfg);
+            bt.run(bars.data(), bars.size(), "EURUSD", AF_TF_H1);
+            af::TradeJournal j(db);
+            CHK_EQ(j.row_count(), n_after_first);
+        }
+        /* A different run_id, same trades — rows DO get added (different key namespace). */
+        {
+            cfg.journal_run_id = "experiment_beta";
+            auto algo = af::make_trend_follower(21,50,22);
+            af::BacktestEngine bt(algo.get(), cfg);
+            bt.run(bars.data(), bars.size(), "EURUSD", AF_TF_H1);
+            af::TradeJournal j(db);
+            CHK_EQ(j.row_count(), 2 * n_after_first);
+        }
+        std::remove(db);
+    });
+
     T("CsvBars: loads ISO datetime + header + comma format", []{
         const char *path = "/tmp/af_test_iso.csv";
         {

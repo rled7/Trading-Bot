@@ -35,6 +35,9 @@ static void print_usage(const char *prog) {
            "  --capital 10000       Starting capital\n"
            "  --risk   0.01         Risk per trade (fraction)\n"
            "  --journal-db PATH     Write each closed trade to this SQLite DB\n"
+           "  --journal-run-id ID   Fix the journal run identifier so trades are\n"
+           "                        idempotent (re-running this exact backtest\n"
+           "                        against the same DB is a no-op)\n"
            "  --csv        PATH     Load OHLCV bars from a CSV file instead of\n"
            "                        the paper broker's synthetic random walk\n"
            "  --help\n", prog);
@@ -61,6 +64,7 @@ int main(int argc, char **argv) {
     double      capital = 10000.0;
     double      risk    = 0.01;
     std::string journal_db;
+    std::string journal_run_id;
     std::string csv_path;
 
     for (int i=1;i<argc;i++) {
@@ -72,6 +76,7 @@ int main(int argc, char **argv) {
         if (strcmp(argv[i],"--capital")==0&& i+1<argc) capital = std::stod(argv[++i]);
         if (strcmp(argv[i],"--risk"  )==0 && i+1<argc) risk    = std::stod(argv[++i]);
         if (strcmp(argv[i],"--journal-db")==0 && i+1<argc) journal_db = argv[++i];
+        if (strcmp(argv[i],"--journal-run-id")==0 && i+1<argc) journal_run_id = argv[++i];
         if (strcmp(argv[i],"--csv")==0 && i+1<argc) csv_path = argv[++i];
     }
 
@@ -134,6 +139,7 @@ int main(int argc, char **argv) {
     cfg.initial_capital  = capital;
     cfg.risk_pct         = risk;
     cfg.journal_db_path  = journal_db;
+    cfg.journal_run_id   = journal_run_id;
 
     af::BacktestEngine bt_engine(algo.get(), cfg);
     auto result = bt_engine.run(bar_buf.data(), (size_t)filled,

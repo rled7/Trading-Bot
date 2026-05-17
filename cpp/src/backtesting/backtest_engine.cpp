@@ -146,11 +146,15 @@ BTResult BacktestEngine::run(const AF_Bar *bars, size_t count,
     if (!cfg_.journal_db_path.empty()) {
         journal = std::make_unique<TradeJournal>(cfg_.journal_db_path);
         if (journal->ok()) {
-            auto epoch_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                std::chrono::system_clock::now().time_since_epoch()).count();
-            std::ostringstream rid;
-            rid << symbol << "_" << tf_name(tf) << "_" << algo_->name() << "_" << epoch_ms;
-            run_id = rid.str();
+            if (!cfg_.journal_run_id.empty()) {
+                run_id = cfg_.journal_run_id;
+            } else {
+                auto epoch_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                    std::chrono::system_clock::now().time_since_epoch()).count();
+                std::ostringstream rid;
+                rid << symbol << "_" << tf_name(tf) << "_" << algo_->name() << "_" << epoch_ms;
+                run_id = rid.str();
+            }
             printf("[BT] Journaling to %s | run_id=%s\n",
                    cfg_.journal_db_path.c_str(), run_id.c_str());
         } else {
@@ -233,6 +237,13 @@ BTResult BacktestEngine::run(const AF_Bar *bars, size_t count,
         open_trade.sl          = std::round(sl * 100000.0) / 100000.0;
         open_trade.tp          = std::round(tp * 100000.0) / 100000.0;
         snprintf(open_trade.algo, 63, "%s", algo_->name());
+        /* Deterministic idempotency key. Same backtest + same run_id => same
+           client_id => journal insert is a no-op (INSERT OR IGNORE). */
+        if (!run_id.empty()) {
+            snprintf(open_trade.client_id, sizeof(open_trade.client_id),
+                     "%s#%lld#%d", run_id.c_str(),
+                     (long long)open_trade.entry_time, (int)open_trade.direction);
+        }
         in_trade = true;
     }
 

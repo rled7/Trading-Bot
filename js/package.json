@@ -1,0 +1,14 @@
+{
+  "name": "algoforge",
+  "version": "0.1.0",
+  "description": "Algorithmic trading bot — JavaScript implementation",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test":  "node --test test/*.test.js",
+    "bench": "node src/bench.js"
+  },
+  "dependencies": {}
+}

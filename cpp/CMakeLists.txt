@@ -48,6 +48,7 @@ set(CPP_SOURCES
   src/core/engine.cpp
   src/core/config.cpp
   src/broker/paper_broker.cpp
+  src/broker/mt5_broker.cpp
   src/data/bar_store.cpp
   src/data/trade_journal.cpp
   src/data/csv_bars.cpp
@@ -74,8 +75,10 @@ target_link_libraries(af_engine PUBLIC sqlite3 Threads::Threads)
 
 add_executable(algoforge   src/main.cpp)
 add_executable(af_backtest src/backtest_main.cpp)
+add_executable(af_bench    src/bench_main.cpp)
 target_link_libraries(algoforge   PRIVATE af_engine)
 target_link_libraries(af_backtest PRIVATE af_engine)
+target_link_libraries(af_bench    PRIVATE af_engine)
 
 enable_testing()
 add_executable(af_tests
