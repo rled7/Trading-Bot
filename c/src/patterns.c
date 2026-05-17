@@ -280,20 +280,23 @@ size_t af_scan_patterns(const af_bar_t *bars, size_t n,
             if ((s = af_is_three_black_crows(b0o,b0h,b0l,b0c, b1o,b1h,b1l,b1c, o,h,l,c)))
                 count += emit(out, out_cap, count, (int)i, "three_black_crows", s);
         }
-        /* Chart patterns — use window ending at bar i (length = i+1). */
-        size_t win = i + 1;
-        if (win >= 20) {
-            if ((s = af_is_ascending_triangle(bars, win)))
-                count += emit(out, out_cap, count, (int)i, "ascending_triangle", s);
-            if ((s = af_is_descending_triangle(bars, win)))
-                count += emit(out, out_cap, count, (int)i, "descending_triangle", s);
-        }
-        if (win >= 30) {
-            if ((s = af_is_double_top(bars, win)))
-                count += emit(out, out_cap, count, (int)i, "double_top", s);
-            if ((s = af_is_double_bottom(bars, win)))
-                count += emit(out, out_cap, count, (int)i, "double_bottom", s);
-        }
+    }
+    /* Chart patterns — single-shot scan at the latest bar only. Calling
+       them at every bar made scan O(n²); they're "what's the latest
+       structural pattern" detectors, so once per scan is correct. */
+    if (n >= 20) {
+        int s;
+        if ((s = af_is_ascending_triangle(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "ascending_triangle", s);
+        if ((s = af_is_descending_triangle(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "descending_triangle", s);
+    }
+    if (n >= 30) {
+        int s;
+        if ((s = af_is_double_top(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "double_top", s);
+        if ((s = af_is_double_bottom(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "double_bottom", s);
     }
     return count;
 }
