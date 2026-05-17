@@ -1,10 +1,15 @@
-"""SMA / EMA / RSI / ATR — same math as the cpp/ reference.
+"""SMA / EMA / RSI / ATR / MACD / Bollinger / Stochastic / OBV / ADX — same math as the cpp/ reference.
 
 API:
     sma(values, period) -> list[float | None]
     ema(values, period) -> list[float | None]
     rsi(values, period) -> list[float | None]
     atr(highs, lows, closes, period) -> list[float | None]
+    macd(values, fast, slow, signal) -> tuple[list[float | None], list[float | None], list[float | None]]
+    bollinger(values, period, mult) -> tuple[list[float | None], list[float | None], list[float | None]]
+    stochastic(highs, lows, closes, k_period, d_period) -> tuple[list[float | None], list[float | None]]
+    obv(closes, volumes) -> list[float]
+    adx(highs, lows, closes, period) -> tuple[list[float | None], list[float | None], list[float | None]]
 
 Indices where the indicator is not yet defined come back as None.
 Raises ValueError for invalid args (period <= 0, mismatched lengths, etc.).
@@ -20,33 +25,78 @@ def _check_period(period: int) -> None:
         raise ValueError(f"period must be a positive integer, got {period!r}")
 
 
-def sma(values: Sequence[float], period: int) -> list[float | None]:
+def sma(values: Sequence[float | None], period: int) -> list[float | None]:
+    """Simple moving average.
+
+    Handles None entries by finding the first run of *period* consecutive
+    non-None values (matching cpp/ af_sma NaN-skip behaviour).
+    """
     _check_period(period)
     n = len(values)
     out: list[float | None] = [None] * n
-    if n < period:
+    # Find first index where we have `period` consecutive non-None values.
+    seed_start = -1
+    run = 0
+    for i in range(n):
+        if values[i] is not None:
+            run += 1
+            if run == period:
+                seed_start = i - period + 1
+                break
+        else:
+            run = 0
+    if seed_start < 0:
         return out
-    window = sum(values[:period])
-    out[period - 1] = window / period
-    for i in range(period, n):
-        window += values[i] - values[i - period]
-        out[i] = window / period
+    seed_end = seed_start + period - 1
+    window = sum(values[seed_start : seed_end + 1])  # type: ignore[arg-type]
+    out[seed_end] = window / period
+    for i in range(seed_end + 1, n):
+        if values[i] is None or values[i - period] is None:
+            # Gap — reset is not in cpp but None elements break the sliding window;
+            # propagate None for safety.
+            out[i] = None
+        else:
+            window += values[i] - values[i - period]  # type: ignore[operator]
+            out[i] = window / period
     return out
 
 
-def ema(values: Sequence[float], period: int) -> list[float | None]:
+def ema(values: Sequence[float | None], period: int) -> list[float | None]:
+    """Exponential moving average.
+
+    Handles None entries by finding the first run of *period* consecutive
+    non-None values (matching cpp/ af_ema NaN-skip behaviour).
+    """
     _check_period(period)
     n = len(values)
     out: list[float | None] = [None] * n
-    if n < period:
+    # Find first index where we have `period` consecutive non-None values.
+    seed_start = -1
+    run = 0
+    for i in range(n):
+        if values[i] is not None:
+            run += 1
+            if run == period:
+                seed_start = i - period + 1
+                break
+        else:
+            run = 0
+    if seed_start < 0:
         return out
     alpha = 2.0 / (period + 1)
-    seed = sum(values[:period]) / period
-    out[period - 1] = seed
+    seed_end = seed_start + period - 1
+    seed = sum(values[seed_start : seed_end + 1]) / period  # type: ignore[arg-type]
+    out[seed_end] = seed
     prev = seed
-    for i in range(period, n):
-        prev = values[i] * alpha + prev * (1.0 - alpha)
-        out[i] = prev
+    for i in range(seed_end + 1, n):
+        if values[i] is None:
+            out[i] = None
+            prev = None  # type: ignore[assignment]
+        elif prev is None:
+            out[i] = None
+        else:
+            prev = values[i] * alpha + prev * (1.0 - alpha)  # type: ignore[operator]
+            out[i] = prev
     return out
 
 
@@ -108,3 +158,165 @@ def atr(highs: Sequence[float], lows: Sequence[float],
         prev = tr[i] * alpha + prev * (1.0 - alpha)
         out[i] = prev
     return out
+
+
+def macd(values: Sequence[float], fast: int = 12, slow: int = 26, signal: int = 9,
+         ) -> tuple[list[float | None], list[float | None], list[float | None]]:
+    """Return (macd_line, signal_line, histogram).
+
+    macd_line  = EMA(fast) - EMA(slow); None where either EMA is None.
+    signal_line = EMA(macd_line, signal); None where macd_line is None.
+    histogram  = macd_line - signal_line; None where either is None.
+    Raises ValueError for invalid period args.
+    """
+    _check_period(fast)
+    _check_period(slow)
+    _check_period(signal)
+    n = len(values)
+    ef = ema(values, fast)
+    es = ema(values, slow)
+    macd_line: list[float | None] = [
+        None if (ef[i] is None or es[i] is None) else ef[i] - es[i]  # type: ignore[operator]
+        for i in range(n)
+    ]
+    signal_line = ema(macd_line, signal)
+    histogram: list[float | None] = [
+        None if (macd_line[i] is None or signal_line[i] is None)
+        else macd_line[i] - signal_line[i]  # type: ignore[operator]
+        for i in range(n)
+    ]
+    return macd_line, signal_line, histogram
+
+
+def bollinger(values: Sequence[float], period: int = 20, mult: float = 2.0,
+              ) -> tuple[list[float | None], list[float | None], list[float | None]]:
+    """Return (upper, middle, lower) Bollinger Bands.
+
+    middle = SMA(period); std is population std (variance = sum((x-mean)^2)/period).
+    upper  = middle + mult*std; lower = middle - mult*std.
+    Raises ValueError for invalid period.
+    """
+    _check_period(period)
+    n = len(values)
+    middle = sma(values, period)
+    upper:  list[float | None] = [None] * n
+    lower:  list[float | None] = [None] * n
+    for i in range(period - 1, n):
+        if middle[i] is None:
+            continue
+        m = middle[i]
+        var = sum((values[i - j] - m) ** 2 for j in range(period)) / period  # type: ignore[operator]
+        sd = var ** 0.5
+        upper[i] = m + mult * sd  # type: ignore[operator]
+        lower[i] = m - mult * sd  # type: ignore[operator]
+    return upper, middle, lower
+
+
+def stochastic(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
+               k_period: int = 14, d_period: int = 3,
+               ) -> tuple[list[float | None], list[float | None]]:
+    """Return (k, d) stochastic lines.
+
+    raw %K = 100*(close - lowest_low) / (highest_high - lowest_low) over k_period.
+    When range is zero, raw %K = 50 (matching cpp/ reference).
+    k_out = SMA(raw_k, d_period); d_out = SMA(k_out, d_period).
+    Raises ValueError for invalid periods or mismatched input lengths.
+    """
+    _check_period(k_period)
+    _check_period(d_period)
+    n = len(highs)
+    if not (len(lows) == n and len(closes) == n):
+        raise ValueError("highs, lows, closes must all have the same length")
+    # Compute raw %K (NaN-equivalent = None for indices < k_period-1)
+    raw_k: list[float | None] = [None] * n
+    for i in range(k_period - 1, n):
+        lo = min(lows[i - j] for j in range(k_period))
+        hi = max(highs[i - j] for j in range(k_period))
+        r = hi - lo
+        raw_k[i] = 100.0 * (closes[i] - lo) / r if r > 1e-10 else 50.0
+    # k_out = SMA(raw_k, d_period); d_out = SMA(k_out, d_period)
+    k_out = sma(raw_k, d_period)
+    d_out = sma(k_out, d_period)
+    return k_out, d_out
+
+
+def obv(closes: Sequence[float], volumes: Sequence[float]) -> list[float]:
+    """Return on-balance volume.
+
+    out[0] = 0; out[i] = out[i-1] + vol[i] if close rises, -vol[i] if falls, else 0.
+    Raises ValueError for mismatched input lengths.
+    """
+    n = len(closes)
+    if len(volumes) != n:
+        raise ValueError("closes and volumes must have the same length")
+    out = [0.0] * n
+    for i in range(1, n):
+        d = closes[i] - closes[i - 1]
+        out[i] = out[i - 1] + (volumes[i] if d > 0 else -volumes[i] if d < 0 else 0.0)
+    return out
+
+
+def adx(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
+        period: int = 14,
+        ) -> tuple[list[float | None], list[float | None], list[float | None]]:
+    """Return (adx, +DI, -DI).
+
+    Wilder smoothing (alpha = 1/period) over TR, +DM, -DM.
+    +DI = 100*+DM_smoothed/ATR_smoothed; -DI = 100*-DM_smoothed/ATR_smoothed.
+    DX = 100*|+DI - -DI|/(+DI + -DI); ADX = Wilder-smoothed DX.
+    Output is defined starting at index period (requires n >= 2*period+1 for all
+    outputs to be valid — matching the cpp/ reference guard).
+    Raises ValueError for invalid period or mismatched input lengths.
+    """
+    _check_period(period)
+    n = len(highs)
+    if not (len(lows) == n and len(closes) == n):
+        raise ValueError("highs, lows, closes must all have the same length")
+    none_n: list[float | None] = [None] * n
+    if n < 2 * period + 1:
+        return list(none_n), list(none_n), list(none_n)
+
+    EPSILON = 1e-10
+    alpha = 1.0 / period
+
+    # Build TR, +DM, -DM (index 0 unused / 0.0, as in cpp/)
+    tr   = [0.0] * n
+    pdm  = [0.0] * n
+    mdm  = [0.0] * n
+    for i in range(1, n):
+        hl  = highs[i] - lows[i]
+        hpc = abs(highs[i] - closes[i - 1])
+        lpc = abs(lows[i]  - closes[i - 1])
+        tr[i] = max(hl, hpc, lpc)
+        up = highs[i] - highs[i - 1]
+        dn = lows[i - 1] - lows[i]
+        pdm[i] = up if (up > dn and up > 0) else 0.0
+        mdm[i] = dn if (dn > up and dn > 0) else 0.0
+
+    out_adx: list[float | None] = [None] * n
+    out_pdi: list[float | None] = [None] * n
+    out_mdi: list[float | None] = [None] * n
+
+    # Seed: sum indices 1..period (inclusive), same as cpp/
+    atr_v = sum(tr[1 : period + 1])
+    pdm_s = sum(pdm[1 : period + 1])
+    mdm_s = sum(mdm[1 : period + 1])
+
+    for i in range(period, n):
+        if i > period:
+            atr_v = atr_v * (1 - alpha) + tr[i]
+            pdm_s = pdm_s * (1 - alpha) + pdm[i]
+            mdm_s = mdm_s * (1 - alpha) + mdm[i]
+        pdi = 100.0 * pdm_s / atr_v if atr_v > EPSILON else 0.0
+        mdi = 100.0 * mdm_s / atr_v if atr_v > EPSILON else 0.0
+        out_pdi[i] = pdi
+        out_mdi[i] = mdi
+        denom = pdi + mdi
+        dx = 100.0 * abs(pdi - mdi) / denom if denom > EPSILON else 0.0
+        if i == period:
+            out_adx[i] = dx
+        else:
+            prev_adx = out_adx[i - 1]
+            out_adx[i] = prev_adx * (1 - alpha) + dx * alpha  # type: ignore[operator]
+
+    return out_adx, out_pdi, out_mdi

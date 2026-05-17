@@ -19,10 +19,10 @@ registry, risk rules) but no code.
 
 | Project   | Test entry                                    | Bench entry                         | Tests |
 |-----------|-----------------------------------------------|-------------------------------------|-------|
-| c/        | `make -C c test`                              | `make -C c bench && c/build/af_bench`           | 41    |
-| cpp/      | `cpp/build/Release/af_tests`                  | `cpp/build/Release/af_bench`                    | 102   |
-| python/   | `(cd python && PYTHONPATH=. python3 -m unittest discover tests)` | `(cd python && PYTHONPATH=. python3 -m algoforge.bench)` | 47    |
-| js/       | `npm --prefix js test`                        | `npm --prefix js run bench`                     | 47    |
+| c/        | `make -C c test`                              | `make -C c bench && c/build/af_bench`           | 833 checks |
+| cpp/      | `cpp/build/Release/af_tests`                  | `cpp/build/Release/af_bench`                    | 102 tests  |
+| python/   | `(cd python && PYTHONPATH=. python3 -m unittest discover tests)` | `(cd python && PYTHONPATH=. python3 -m algoforge.bench)` | 108 tests  |
+| js/       | `npm --prefix js test`                        | `npm --prefix js run bench`                     | 100 tests  |
 
 Each language's bench accepts `[bars] [iterations]` positional args (defaults
 100000 / 10) and prints a TSV with `# language` / `# bars` / `# iterations`

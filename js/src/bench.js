@@ -4,7 +4,7 @@
 //   npm run bench
 //   node src/bench.js 100000 10
 
-import { sma, ema, rsi, atr } from "./indicators.js";
+import { sma, ema, rsi, atr, macd, bollinger, stochastic, obv, adx } from "./indicators.js";
 import { scanPatterns }       from "./patterns.js";
 import { Bar }                 from "./types.js";
 
@@ -33,6 +33,7 @@ function main() {
     const src = genSeries(n);
     const hi  = src.map(v => v + 0.5);
     const lo  = src.map(v => v - 0.5);
+    const vol = Array.from({ length: n }, (_, i) => 1000 + (i % 500));
 
     console.log("# language\tjs");
     console.log(`# bars\t${n}`);
@@ -48,11 +49,16 @@ function main() {
     }
 
     const cases = [
-        ["sma20", () => sma(src, 20)],
-        ["ema50", () => ema(src, 50)],
-        ["rsi14", () => rsi(src, 14)],
-        ["atr14", () => atr(hi, lo, src, 14)],
-        ["pscan", () => scanPatterns(bars)],
+        ["sma20",     () => sma(src, 20)],
+        ["ema50",     () => ema(src, 50)],
+        ["rsi14",     () => rsi(src, 14)],
+        ["atr14",     () => atr(hi, lo, src, 14)],
+        ["macd",      () => macd(src, 12, 26, 9)],
+        ["bollinger", () => bollinger(src, 20, 2.0)],
+        ["stoch",     () => stochastic(hi, lo, src, 14, 3)],
+        ["obv",       () => obv(src, vol)],
+        ["adx",       () => adx(hi, lo, src, 14)],
+        ["pscan",     () => scanPatterns(bars)],
     ];
     for (const [label, fn] of cases) {
         const [total, per] = timed(fn, iters);

@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 import time
 
-from .indicators import sma, ema, rsi, atr
+from .indicators import sma, ema, rsi, atr, macd, bollinger, stochastic, obv, adx
 from .patterns   import scan_patterns
 from .types      import Bar
 
@@ -39,6 +39,7 @@ def main(argv: list[str]) -> int:
     src = gen_series(n)
     hi  = [v + 0.5 for v in src]
     lo  = [v - 0.5 for v in src]
+    vol = [1000.0 + (i % 500) for i in range(n)]
 
     print(f"# language\tpython")
     print(f"# bars\t{n}")
@@ -52,11 +53,16 @@ def main(argv: list[str]) -> int:
     ]
 
     for label, fn in (
-        ("sma20", lambda: sma(src, 20)),
-        ("ema50", lambda: ema(src, 50)),
-        ("rsi14", lambda: rsi(src, 14)),
-        ("atr14", lambda: atr(hi, lo, src, 14)),
-        ("pscan", lambda: scan_patterns(bars)),
+        ("sma20",     lambda: sma(src, 20)),
+        ("ema50",     lambda: ema(src, 50)),
+        ("rsi14",     lambda: rsi(src, 14)),
+        ("atr14",     lambda: atr(hi, lo, src, 14)),
+        ("macd",      lambda: macd(src, 12, 26, 9)),
+        ("bollinger", lambda: bollinger(src, 20, 2.0)),
+        ("stoch",     lambda: stochastic(hi, lo, src, 14, 3)),
+        ("obv",       lambda: obv(src, vol)),
+        ("adx",       lambda: adx(hi, lo, src, 14)),
+        ("pscan",     lambda: scan_patterns(bars)),
     ):
         total, per = _time(fn, iters)
         print(f"{label}\t{total}\t{per}")

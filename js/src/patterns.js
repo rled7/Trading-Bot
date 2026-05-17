@@ -64,6 +64,74 @@ export function isPinBar(bar, minWickMult = 2.0) {
     return 0;
 }
 
+// ── Three-candle patterns ────────────────────────────────────────────────────
+// All match cpp/ candlestick_patterns.cpp logic exactly.
+
+// Morning Star: bearish first bar (body > range*0.60), small middle (body < b0.body*0.30),
+// bullish last closing above midpoint of first bar's body.
+export function isMorningStar(b0, b1, b2) {
+    const g0 = geom(b0.open, b0.high, b0.low, b0.close);
+    const g1 = geom(b1.open, b1.high, b1.low, b1.close);
+    const g2 = geom(b2.open, b2.high, b2.low, b2.close);
+    if (g0.range < EPSILON || g1.range < EPSILON || g2.range < EPSILON) return 0;
+    // b0: bearish with large body (close < open in cpp: !is_bullish means close < open since is_bullish = close >= open)
+    const bearFirst = !g0.bull && g0.body > g0.range * 0.60;
+    // b1: small body relative to b0's body
+    const smallMid  = g1.body < g0.body * 0.30;
+    // b2: bullish, close above midpoint of b0 body
+    const midpoint  = (b0.open + b0.close) / 2.0;
+    const bullLast  = g2.bull && b2.close > midpoint;
+    if (bearFirst && smallMid && bullLast) return 1;
+    return 0;
+}
+
+// Evening Star: bullish first bar (body > range*0.60), small middle (body < b0.body*0.30),
+// bearish last closing below midpoint of first bar's body.
+export function isEveningStar(b0, b1, b2) {
+    const g0 = geom(b0.open, b0.high, b0.low, b0.close);
+    const g1 = geom(b1.open, b1.high, b1.low, b1.close);
+    const g2 = geom(b2.open, b2.high, b2.low, b2.close);
+    if (g0.range < EPSILON || g1.range < EPSILON || g2.range < EPSILON) return 0;
+    const bullFirst = g0.bull && g0.body > g0.range * 0.60;
+    const smallMid  = g1.body < g0.body * 0.30;
+    const midpoint  = (b0.open + b0.close) / 2.0;
+    const bearLast  = !g2.bull && b2.close < midpoint;
+    if (bullFirst && smallMid && bearLast) return -1;
+    return 0;
+}
+
+// Three White Soldiers: all three bars bullish, body_pct >= 0.60,
+// upper_shadow < body * 0.30, and each close higher than the previous.
+// Matches cpp/ ThreeWhiteSoldiers.
+export function isThreeWhiteSoldiers(b0, b1, b2) {
+    const bars = [b0, b1, b2];
+    for (const bar of bars) {
+        const g = geom(bar.open, bar.high, bar.low, bar.close);
+        if (!g.bull) return 0;
+        if (g.range < EPSILON) return 0;
+        if (g.body / g.range < 0.60) return 0;    // body_pct < 0.60
+        if (g.upper > g.body * 0.30) return 0;    // upper_shadow >= body*0.30
+    }
+    if (b1.close <= b0.close || b2.close <= b1.close) return 0;
+    return 1;
+}
+
+// Three Black Crows: all three bars bearish, body_pct >= 0.60,
+// lower_shadow < body * 0.30, and each close lower than the previous.
+// Matches cpp/ ThreeBlackCrows.
+export function isThreeBlackCrows(b0, b1, b2) {
+    const bars = [b0, b1, b2];
+    for (const bar of bars) {
+        const g = geom(bar.open, bar.high, bar.low, bar.close);
+        if (g.bull) return 0;
+        if (g.range < EPSILON) return 0;
+        if (g.body / g.range < 0.60) return 0;    // body_pct < 0.60
+        if (g.lower > g.body * 0.30) return 0;    // lower_shadow >= body*0.30
+    }
+    if (b1.close >= b0.close || b2.close >= b1.close) return 0;
+    return -1;
+}
+
 export class PatternMatch {
     constructor(barIndex, name, signal) {
         this.barIndex = barIndex;
@@ -84,6 +152,20 @@ export function scanPatterns(bars) {
         if (i > 0) {
             if ((s = isEngulfing(bars[i - 1], b))) {
                 out.push(new PatternMatch(i, "engulfing", s));
+            }
+        }
+        if (i >= 2) {
+            if ((s = isMorningStar(bars[i - 2], bars[i - 1], b))) {
+                out.push(new PatternMatch(i, "morning_star", s));
+            }
+            if ((s = isEveningStar(bars[i - 2], bars[i - 1], b))) {
+                out.push(new PatternMatch(i, "evening_star", s));
+            }
+            if ((s = isThreeWhiteSoldiers(bars[i - 2], bars[i - 1], b))) {
+                out.push(new PatternMatch(i, "three_white_soldiers", s));
+            }
+            if ((s = isThreeBlackCrows(bars[i - 2], bars[i - 1], b))) {
+                out.push(new PatternMatch(i, "three_black_crows", s));
             }
         }
     }

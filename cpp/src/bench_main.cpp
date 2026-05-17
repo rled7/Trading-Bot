@@ -36,8 +36,12 @@ int main(int argc, char **argv) {
     int    iters = (argc > 2) ? std::atoi(argv[2])                       : 10;
 
     auto src = gen_series(n);
-    std::vector<double> hi(n), lo(n), out(n);
-    for (size_t i = 0; i < n; ++i) { hi[i] = src[i] + 0.5; lo[i] = src[i] - 0.5; }
+    std::vector<double> hi(n), lo(n), vol(n), out(n), aux1(n), aux2(n);
+    for (size_t i = 0; i < n; ++i) {
+        hi[i]  = src[i] + 0.5;
+        lo[i]  = src[i] - 0.5;
+        vol[i] = 1000.0 + static_cast<double>(i % 500);
+    }
     std::vector<AF_Bar> bars(n);
     for (size_t i = 0; i < n; ++i) {
         bars[i] = {};
@@ -64,6 +68,16 @@ int main(int argc, char **argv) {
     std::printf("rsi14\t%lld\t%lld\n", r_total, r_per);
     auto [a_total, a_per] = timed([&]{ af_atr(hi.data(), lo.data(), src.data(), n, 14, out.data()); }, iters);
     std::printf("atr14\t%lld\t%lld\n", a_total, a_per);
+    auto [macd_t, macd_p] = timed([&]{ af_macd(src.data(), n, 12, 26, 9, out.data(), aux1.data(), aux2.data()); }, iters);
+    std::printf("macd\t%lld\t%lld\n", macd_t, macd_p);
+    auto [bol_t, bol_p]   = timed([&]{ af_bollinger(src.data(), n, 20, 2.0, out.data(), aux1.data(), aux2.data(), nullptr, nullptr); }, iters);
+    std::printf("bollinger\t%lld\t%lld\n", bol_t, bol_p);
+    auto [st_t, st_p]     = timed([&]{ af_stochastic(hi.data(), lo.data(), src.data(), n, 14, 3, 3, out.data(), aux1.data()); }, iters);
+    std::printf("stoch\t%lld\t%lld\n", st_t, st_p);
+    auto [obv_t, obv_p]   = timed([&]{ af_obv(src.data(), vol.data(), n, out.data()); }, iters);
+    std::printf("obv\t%lld\t%lld\n", obv_t, obv_p);
+    auto [adx_t, adx_p]   = timed([&]{ af_adx(hi.data(), lo.data(), src.data(), n, 14, out.data(), aux1.data(), aux2.data()); }, iters);
+    std::printf("adx\t%lld\t%lld\n", adx_t, adx_p);
     auto [p_total, p_per] = timed([&]{ (void)eng.scan(bars.data(), n); }, iters);
     std::printf("pscan\t%lld\t%lld\n", p_total, p_per);
 

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "af_patterns.h"
 
 static int g_passed = 0;
@@ -141,6 +142,179 @@ static void test_scan_respects_out_cap(void) {
     /* Buffer only written for the first 4. */
 }
 
+/* ── Morning Star ──────────────────────────────────────────────────── */
+static void test_morning_star_match(void) {
+    /* b0: bearish, big body: o=10, h=10.2, l=6, c=6.5 → body=3.5, range=4.2, body/range=0.83 > 0.60 ✓
+       b1: small body relative to b0: o=6.3, h=6.4, l=6.0, c=6.1 → body=0.2, b0.body=3.5, 0.2<3.5*0.30=1.05 ✓
+       b2: bullish, close > b0 body midpoint = (10+6.5)/2=8.25: o=6.5, h=9.0, l=6.4, c=9.0 → close=9.0 > 8.25 ✓ */
+    CHK(af_is_morning_star(10.0,10.2,6.0,6.5,
+                            6.3,6.4,6.0,6.1,
+                            6.5,9.0,6.4,9.0) == 1);
+}
+
+static void test_morning_star_b0_small_body(void) {
+    /* b0 body too small: o=10, h=10.5, l=6, c=8 → body=2, range=4.5, ratio=0.44 < 0.60 → no match */
+    CHK(af_is_morning_star(10.0,10.5,6.0,8.0,
+                            6.3,6.4,6.0,6.1,
+                            6.5,9.0,6.4,9.0) == 0);
+}
+
+static void test_morning_star_b1_large_body(void) {
+    /* b1 body too large: b1.body=2.0, b0.body=3.5, 2.0 >= 3.5*0.30=1.05 → no match */
+    CHK(af_is_morning_star(10.0,10.2,6.0,6.5,
+                            6.0,7.5,5.5,8.0,
+                            8.5,9.5,8.4,9.5) == 0);
+}
+
+static void test_morning_star_b2_not_bullish(void) {
+    /* b2 bearish → no match */
+    CHK(af_is_morning_star(10.0,10.2,6.0,6.5,
+                            6.3,6.4,6.0,6.1,
+                            9.0,9.2,6.4,6.0) == 0);
+}
+
+static void test_morning_star_b2_close_low(void) {
+    /* b2 bullish but closes below b0 midpoint → no match */
+    CHK(af_is_morning_star(10.0,10.2,6.0,6.5,
+                            6.3,6.4,6.0,6.1,
+                            6.5,7.0,6.4,7.0) == 0);
+}
+
+static void test_morning_star_zero_range(void) {
+    /* b0 has zero range → no match */
+    CHK(af_is_morning_star(5.0,5.0,5.0,5.0,
+                            6.3,6.4,6.0,6.1,
+                            6.5,9.0,6.4,9.0) == 0);
+}
+
+/* ── Evening Star ──────────────────────────────────────────────────── */
+static void test_evening_star_match(void) {
+    /* mirror of morning star: b0 bullish big body, b1 small, b2 bearish close below b0 mid */
+    /* b0: o=6, h=10.2, l=5.8, c=9.5 → body=3.5, range=4.4, body/range=0.80 > 0.60 ✓
+       b1: o=9.7, h=9.9, l=9.4, c=9.6 → body=0.1, b0.body=3.5, 0.1<1.05 ✓
+       b0 mid=(6+9.5)/2=7.75; b2: o=9.5, h=9.6, l=6.0, c=7.0, bearish, c<7.75 ✓ */
+    CHK(af_is_evening_star(6.0,10.2,5.8,9.5,
+                            9.7,9.9,9.4,9.6,
+                            9.5,9.6,6.0,7.0) == -1);
+}
+
+static void test_evening_star_b0_bearish(void) {
+    /* b0 bearish → no match for evening star */
+    CHK(af_is_evening_star(9.5,10.2,5.8,6.0,
+                            9.7,9.9,9.4,9.6,
+                            9.5,9.6,6.0,7.0) == 0);
+}
+
+static void test_evening_star_b2_bullish(void) {
+    /* b2 bullish → no match */
+    CHK(af_is_evening_star(6.0,10.2,5.8,9.5,
+                            9.7,9.9,9.4,9.6,
+                            7.0,9.0,6.8,8.5) == 0);
+}
+
+static void test_evening_star_zero_range(void) {
+    CHK(af_is_evening_star(5.0,5.0,5.0,5.0,
+                            5.0,5.1,4.9,5.0,
+                            5.0,5.0,4.5,4.5) == 0);
+}
+
+/* ── Three White Soldiers ──────────────────────────────────────────── */
+/* cpp/ rule: each bar bullish, body_pct >= 0.60, upper_shadow < body*0.30,
+   closes strictly rising. (open-within-prev is NOT a cpp/ requirement.) */
+static void test_three_white_soldiers_match(void) {
+    /* Each bar: body=2, range≈2.1, upper_shadow=0.05 → all conditions met. */
+    CHK(af_is_three_white_soldiers(10.0,12.05, 9.95,12.0,
+                                    11.0,13.05,10.95,13.0,
+                                    12.0,14.05,11.95,14.0) == 1);
+}
+
+static void test_three_white_soldiers_bearish_bar(void) {
+    /* Middle bar is bearish (c < o) */
+    CHK(af_is_three_white_soldiers(10.0,12.05, 9.95,12.0,
+                                    13.0,13.05, 10.95,11.0,   /* bearish */
+                                    12.0,14.05,11.95,14.0) == 0);
+}
+
+static void test_three_white_soldiers_body_too_small(void) {
+    /* b1 has body_pct = 2/20 = 0.10 < 0.60 → no match */
+    CHK(af_is_three_white_soldiers(10.0,12.05, 9.95,12.0,
+                                    11.0,21.0, 1.0, 13.0,    /* tiny body in huge range */
+                                    12.0,14.05,11.95,14.0) == 0);
+}
+
+static void test_three_white_soldiers_close_not_higher(void) {
+    /* b1.close == b0.close → no match */
+    CHK(af_is_three_white_soldiers(10.0,12.05, 9.95,12.0,
+                                    11.0,12.05,10.95,12.0,
+                                    12.0,13.05,11.95,13.0) == 0);
+}
+
+/* ── Three Black Crows ─────────────────────────────────────────────── */
+static void test_three_black_crows_match(void) {
+    /* Each bar: body=2, range≈2.1, lower_shadow=0.05 → all conditions met. */
+    CHK(af_is_three_black_crows(14.0,14.05,11.95,12.0,
+                                  13.0,13.05,10.95,11.0,
+                                  12.0,12.05, 9.95,10.0) == -1);
+}
+
+static void test_three_black_crows_bullish_bar(void) {
+    /* Last bar is bullish */
+    CHK(af_is_three_black_crows(14.0,14.05,11.95,12.0,
+                                  13.0,13.05,10.95,11.0,
+                                  10.5,11.55,10.45,11.5) == 0);
+}
+
+static void test_three_black_crows_body_too_small(void) {
+    /* b1 body_pct = 2/20 = 0.10 < 0.60 → no match */
+    CHK(af_is_three_black_crows(14.0,14.05,11.95,12.0,
+                                  13.0,23.0, 3.0, 11.0,
+                                  12.0,12.05, 9.95,10.0) == 0);
+}
+
+static void test_three_black_crows_close_not_lower(void) {
+    /* b1.close == b0.close → no match */
+    CHK(af_is_three_black_crows(14.0,14.05,11.95,12.0,
+                                  13.0,13.05,11.95,12.0,
+                                  12.0,12.05, 9.95,10.0) == 0);
+}
+
+/* ── Scan with three-bar patterns ──────────────────────────────────── */
+static void test_scan_three_bar_morning_star(void) {
+    af_bar_t bars[3];
+    /* b0: bearish large body */
+    bars[0].open=10.0; bars[0].high=10.2; bars[0].low=6.0; bars[0].close=6.5;
+    /* b1: small body */
+    bars[1].open=6.3;  bars[1].high=6.4;  bars[1].low=6.0;  bars[1].close=6.1;
+    /* b2: bullish, close above b0 midpoint=(10+6.5)/2=8.25 */
+    bars[2].open=6.5;  bars[2].high=9.0;  bars[2].low=6.4;  bars[2].close=9.0;
+
+    af_pattern_match_t out[16];
+    size_t n = af_scan_patterns(bars, 3, out, 16);
+    int saw_ms = 0;
+    for (size_t i = 0; i < n && i < 16; ++i) {
+        if (out[i].bar_index == 2 && out[i].name[0] == 'm' && out[i].name[1] == 'o')
+            saw_ms = 1;
+    }
+    CHK(saw_ms);
+}
+
+static void test_scan_three_bar_three_white_soldiers(void) {
+    af_bar_t bars[3];
+    bars[0].open=10; bars[0].high=12.1; bars[0].low=9.9; bars[0].close=12;
+    bars[1].open=11; bars[1].high=13.1; bars[1].low=10.9; bars[1].close=13;
+    bars[2].open=12; bars[2].high=14.1; bars[2].low=11.9; bars[2].close=14;
+
+    af_pattern_match_t out[16];
+    size_t n = af_scan_patterns(bars, 3, out, 16);
+    int saw_tws = 0;
+    for (size_t i = 0; i < n && i < 16; ++i) {
+        if (out[i].bar_index == 2 &&
+            strcmp(out[i].name, "three_white_soldiers") == 0)
+            saw_tws = 1;
+    }
+    CHK(saw_tws);
+}
+
 /* ── Runner ───────────────────────────────────────────────────────── */
 void test_patterns_run(int *total_passed, int *total_failed) {
     test_doji_match();
@@ -171,6 +345,31 @@ void test_patterns_run(int *total_passed, int *total_failed) {
     test_scan_collects_matches();
     test_scan_empty_input();
     test_scan_respects_out_cap();
+
+    test_morning_star_match();
+    test_morning_star_b0_small_body();
+    test_morning_star_b1_large_body();
+    test_morning_star_b2_not_bullish();
+    test_morning_star_b2_close_low();
+    test_morning_star_zero_range();
+
+    test_evening_star_match();
+    test_evening_star_b0_bearish();
+    test_evening_star_b2_bullish();
+    test_evening_star_zero_range();
+
+    test_three_white_soldiers_match();
+    test_three_white_soldiers_bearish_bar();
+    test_three_white_soldiers_body_too_small();
+    test_three_white_soldiers_close_not_higher();
+
+    test_three_black_crows_match();
+    test_three_black_crows_bullish_bar();
+    test_three_black_crows_body_too_small();
+    test_three_black_crows_close_not_lower();
+
+    test_scan_three_bar_morning_star();
+    test_scan_three_bar_three_white_soldiers();
 
     *total_passed += g_passed;
     *total_failed += g_failed;
