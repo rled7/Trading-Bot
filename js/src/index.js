@@ -5,6 +5,15 @@ export const VERSION = "0.1.0";
 // ── algorithm.js re-exports ──────────────────────────────────────────────────
 export { AlgoSignal, AlgoDecision, IAlgorithm, StubAlgo } from "./algorithm.js";
 
+// ── algorithms.js re-exports ─────────────────────────────────────────────────
+export {
+    TrendFollower,
+    MeanReversion,
+    BreakoutTrader,
+    SwingTrader,
+    AlgorithmRegistry,
+} from "./algorithms.js";
+
 // ── backtest.js re-exports ───────────────────────────────────────────────────
 export { BacktestEngine, BTConfig, BTResult, makeBTTrade } from "./backtest.js";
 

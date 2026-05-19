@@ -7,6 +7,13 @@ from .algorithm  import AlgoDecision, AlgoSignal, IAlgorithm, StubAlgo
 from .backtest   import BTConfig, BTResult, BTTrade, BacktestEngine
 from .indicators import EngineResult, IndicatorEngine
 from .patterns   import PatternEngine, PatternMatch
+from .algorithms import (
+    AlgorithmRegistry,
+    BreakoutTrader,
+    MeanReversion,
+    SwingTrader,
+    TrendFollower,
+)
 
 __all__ = [
     # types
@@ -19,6 +26,12 @@ __all__ = [
     "EngineResult", "IndicatorEngine",
     # patterns
     "PatternEngine", "PatternMatch",
+    # algorithms
+    "AlgorithmRegistry",
+    "BreakoutTrader",
+    "MeanReversion",
+    "SwingTrader",
+    "TrendFollower",
     # version
     "__version__",
 ]
