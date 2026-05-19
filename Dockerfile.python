@@ -1,0 +1,9 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY python/ ./python/
+RUN pip install --no-cache-dir -r python/requirements.txt 2>/dev/null || pip install --no-cache-dir numpy
+ENV PYTHONUNBUFFERED=1
+ENV LOG_LEVEL=INFO
+ENV TELEGRAM_TOKEN=""
+ENV TELEGRAM_CHAT_ID=""
+CMD ["python", "-m", "algoforge"]

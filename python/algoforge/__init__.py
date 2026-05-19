@@ -49,6 +49,9 @@ from .analysis import (
     # constants
     TF_WEIGHTS,
 )
+from .logger import init_logger, get_logger
+from .health import HealthMonitor, HealthSnapshot
+from .telegram import TelegramAlerter
 
 __all__ = [
     # types
@@ -99,6 +102,14 @@ __all__ = [
     "PositionSizer",
     "DrawdownGuard",
     "SignalProcessor",
+    # ops — logger
+    "init_logger",
+    "get_logger",
+    # ops — health
+    "HealthMonitor",
+    "HealthSnapshot",
+    # ops — telegram
+    "TelegramAlerter",
     # version
     "__version__",
 ]

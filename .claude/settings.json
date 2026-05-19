@@ -1,0 +1,19 @@
+{
+  "skillOverrides": {
+    "cc-skill-backend-patterns": "on",
+    "docker-patterns": "on",
+    "docker-expert": "on",
+    "generating-docker-compose-files": "on",
+    "dockerfile-generator": "on",
+    "python-pro": "on",
+    "python-performance": "on",
+    "python-testing": "on",
+    "backtesting-trading-strategies": "on",
+    "generating-trading-signals": "on",
+    "risk-metrics-calculation": "on",
+    "devops": "on",
+    "setting-up-log-aggregation": "on",
+    "generating-unit-tests": "on",
+    "pytest-skill": "on"
+  }
+}

@@ -1,0 +1,14 @@
+FROM ubuntu:22.04
+RUN apt-get update && apt-get install -y gcc make libm-dev && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY c/ ./c/
+RUN cd c && make 2>/dev/null || gcc -O2 -Wall -o algoforge_c \
+    src/main.c src/indicators.c src/patterns.c src/paper_broker.c \
+    src/backtest_engine.c src/stub_algo.c src/algorithms.c src/analysis.c \
+    src/risk.c src/drawdown_guard.c src/signal_processor.c src/logger.c \
+    src/health.c src/telegram.c \
+    -I include -lm
+ENV LOG_LEVEL=info
+ENV TELEGRAM_TOKEN=""
+ENV TELEGRAM_CHAT_ID=""
+CMD ["./algoforge_c"]

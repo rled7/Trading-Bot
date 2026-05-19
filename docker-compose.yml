@@ -1,0 +1,37 @@
+version: "3.9"
+services:
+  algoforge-python:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+    restart: unless-stopped
+    volumes:
+      - ./logs/python:/app/logs
+
+  algoforge-js:
+    build:
+      context: .
+      dockerfile: Dockerfile.js
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+    restart: unless-stopped
+    volumes:
+      - ./logs/js:/app/logs
+
+  algoforge-c:
+    build:
+      context: .
+      dockerfile: Dockerfile.c-lang
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+    restart: unless-stopped
+    volumes:
+      - ./logs/c:/app/logs
