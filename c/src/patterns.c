@@ -310,6 +310,71 @@ int af_is_bearish_flag(const af_bar_t *bars, size_t n) {
     return 0;
 }
 
+int af_fib_ratio(double a, double b, double target, double tol) {
+    if (dabs(a) < 1e-12) return 0;
+    return (dabs(b / a - target) <= tol) ? 1 : 0;
+}
+
+int af_is_gartley_bull(const af_bar_t *bars, size_t n) {
+    if (n < 50) return 0;
+    double x  = min_range(bars, n - 50, n - 40);
+    double a  = max_range(bars, n - 40, n - 30);
+    double bb = min_range(bars, n - 30, n - 20);
+    double cc = max_range(bars, n - 20, n - 10);
+    double d  = min_range(bars, n - 10, n - 1);
+    double xa = a - x, ab = a - bb, bc = cc - bb, cd = cc - d;
+    if (xa > 1e-6 && bc > 1e-6 &&
+        af_fib_ratio(xa, ab, 0.618, 0.05) &&
+        (af_fib_ratio(bc, cd, 1.272, 0.07) || af_fib_ratio(bc, cd, 1.618, 0.07)))
+        return 1;
+    return 0;
+}
+
+int af_is_gartley_bear(const af_bar_t *bars, size_t n) {
+    if (n < 50) return 0;
+    double x  = max_range(bars, n - 50, n - 40);
+    double a  = min_range(bars, n - 40, n - 30);
+    double bb = max_range(bars, n - 30, n - 20);
+    double cc = min_range(bars, n - 20, n - 10);
+    double d  = max_range(bars, n - 10, n - 1);
+    double xa = x - a, ab = bb - a, bc = bb - cc, cd = d - cc;
+    if (xa > 1e-6 && bc > 1e-6 &&
+        af_fib_ratio(xa, ab, 0.618, 0.05) &&
+        (af_fib_ratio(bc, cd, 1.272, 0.07) || af_fib_ratio(bc, cd, 1.618, 0.07)))
+        return -1;
+    return 0;
+}
+
+int af_is_bat_bull(const af_bar_t *bars, size_t n) {
+    if (n < 50) return 0;
+    double x  = min_range(bars, n - 50, n - 40);
+    double a  = max_range(bars, n - 40, n - 30);
+    double d  = min_range(bars, n - 10, n - 1);
+    double xa = a - x, xd = a - d;
+    if (xa > 1e-6 && af_fib_ratio(xa, xd, 0.886, 0.05)) return 1;
+    return 0;
+}
+
+int af_is_butterfly_bull(const af_bar_t *bars, size_t n) {
+    if (n < 50) return 0;
+    double x  = min_range(bars, n - 50, n - 40);
+    double a  = max_range(bars, n - 40, n - 30);
+    double d  = min_range(bars, n - 10, n - 1);
+    double xa = a - x, xd = a - d;
+    if (xa > 1e-6 && af_fib_ratio(xa, xd, 1.272, 0.07)) return 1;
+    return 0;
+}
+
+int af_is_crab_bull(const af_bar_t *bars, size_t n) {
+    if (n < 50) return 0;
+    double x  = min_range(bars, n - 50, n - 40);
+    double a  = max_range(bars, n - 40, n - 30);
+    double d  = min_range(bars, n - 10, n - 1);
+    double xa = a - x, xd = a - d;
+    if (xa > 1e-6 && af_fib_ratio(xa, xd, 1.618, 0.07)) return 1;
+    return 0;
+}
+
 static int emit(af_pattern_match_t *out, size_t cap, size_t i, int idx,
                 const char *name, int sig)
 {
@@ -378,6 +443,19 @@ size_t af_scan_patterns(const af_bar_t *bars, size_t n,
             count += emit(out, out_cap, count, (int)(n - 1), "head_and_shoulders", s);
         if ((s = af_is_inverse_head_and_shoulders(bars, n)))
             count += emit(out, out_cap, count, (int)(n - 1), "inverse_head_and_shoulders", s);
+    }
+    if (n >= 50) {
+        int s;
+        if ((s = af_is_gartley_bull(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "gartley_bull", s);
+        if ((s = af_is_gartley_bear(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "gartley_bear", s);
+        if ((s = af_is_bat_bull(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "bat_bull", s);
+        if ((s = af_is_butterfly_bull(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "butterfly_bull", s);
+        if ((s = af_is_crab_bull(bars, n)))
+            count += emit(out, out_cap, count, (int)(n - 1), "crab_bull", s);
     }
     return count;
 }

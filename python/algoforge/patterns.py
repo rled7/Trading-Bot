@@ -389,6 +389,85 @@ def is_inverse_head_and_shoulders(bars: Sequence[Bar]) -> int:
     return 0
 
 
+def _fib_ratio(a: float, b: float, target: float, tol: float) -> bool:
+    if abs(a) < 1e-12:
+        return False
+    return abs(b / a - target) <= tol
+
+
+def is_gartley_bull(bars: Sequence[Bar]) -> int:
+    n = len(bars)
+    if n < 50:
+        return 0
+    x  = _min_range(bars, n - 50, n - 40)
+    a  = _max_range(bars, n - 40, n - 30)
+    bb = _min_range(bars, n - 30, n - 20)
+    cc = _max_range(bars, n - 20, n - 10)
+    d  = _min_range(bars, n - 10, n - 1)
+    xa = a - x;  ab = a - bb;  bc = cc - bb;  cd = cc - d
+    if (xa > 1e-6 and bc > 1e-6
+            and _fib_ratio(xa, ab, 0.618, 0.05)
+            and (_fib_ratio(bc, cd, 1.272, 0.07) or _fib_ratio(bc, cd, 1.618, 0.07))):
+        return 1
+    return 0
+
+
+def is_gartley_bear(bars: Sequence[Bar]) -> int:
+    n = len(bars)
+    if n < 50:
+        return 0
+    x  = _max_range(bars, n - 50, n - 40)
+    a  = _min_range(bars, n - 40, n - 30)
+    bb = _max_range(bars, n - 30, n - 20)
+    cc = _min_range(bars, n - 20, n - 10)
+    d  = _max_range(bars, n - 10, n - 1)
+    xa = x - a;  ab = bb - a;  bc = bb - cc;  cd = d - cc
+    if (xa > 1e-6 and bc > 1e-6
+            and _fib_ratio(xa, ab, 0.618, 0.05)
+            and (_fib_ratio(bc, cd, 1.272, 0.07) or _fib_ratio(bc, cd, 1.618, 0.07))):
+        return -1
+    return 0
+
+
+def is_bat_bull(bars: Sequence[Bar]) -> int:
+    n = len(bars)
+    if n < 50:
+        return 0
+    x  = _min_range(bars, n - 50, n - 40)
+    a  = _max_range(bars, n - 40, n - 30)
+    d  = _min_range(bars, n - 10, n - 1)
+    xa = a - x;  xd = a - d
+    if xa > 1e-6 and _fib_ratio(xa, xd, 0.886, 0.05):
+        return 1
+    return 0
+
+
+def is_butterfly_bull(bars: Sequence[Bar]) -> int:
+    n = len(bars)
+    if n < 50:
+        return 0
+    x  = _min_range(bars, n - 50, n - 40)
+    a  = _max_range(bars, n - 40, n - 30)
+    d  = _min_range(bars, n - 10, n - 1)
+    xa = a - x;  xd = a - d
+    if xa > 1e-6 and _fib_ratio(xa, xd, 1.272, 0.07):
+        return 1
+    return 0
+
+
+def is_crab_bull(bars: Sequence[Bar]) -> int:
+    n = len(bars)
+    if n < 50:
+        return 0
+    x  = _min_range(bars, n - 50, n - 40)
+    a  = _max_range(bars, n - 40, n - 30)
+    d  = _min_range(bars, n - 10, n - 1)
+    xa = a - x;  xd = a - d
+    if xa > 1e-6 and _fib_ratio(xa, xd, 1.618, 0.07):
+        return 1
+    return 0
+
+
 @dataclass
 class PatternMatch:
     bar_index: int
@@ -440,4 +519,15 @@ def scan_patterns(bars: Sequence[Bar]) -> list[PatternMatch]:
             out.append(PatternMatch(last, "head_and_shoulders", s))
         if (s := is_inverse_head_and_shoulders(bars)):
             out.append(PatternMatch(last, "inverse_head_and_shoulders", s))
+    if n >= 50:
+        if (s := is_gartley_bull(bars)):
+            out.append(PatternMatch(last, "gartley_bull", s))
+        if (s := is_gartley_bear(bars)):
+            out.append(PatternMatch(last, "gartley_bear", s))
+        if (s := is_bat_bull(bars)):
+            out.append(PatternMatch(last, "bat_bull", s))
+        if (s := is_butterfly_bull(bars)):
+            out.append(PatternMatch(last, "butterfly_bull", s))
+        if (s := is_crab_bull(bars)):
+            out.append(PatternMatch(last, "crab_bull", s))
     return out

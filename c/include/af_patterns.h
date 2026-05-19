@@ -50,6 +50,16 @@ int af_is_bullish_flag               (const af_bar_t *bars, size_t n);
 /* Bearish Flag: needs n >= 20. */
 int af_is_bearish_flag               (const af_bar_t *bars, size_t n);
 
+/* Fibonacci ratio check: returns 1 if fabs(b/a - target) <= tol, else 0. */
+int af_fib_ratio(double a, double b, double target, double tol);
+
+/* Harmonic patterns — need n >= 50. Return +1 (bullish), -1 (bearish), or 0. */
+int af_is_gartley_bull   (const af_bar_t *bars, size_t n);
+int af_is_gartley_bear   (const af_bar_t *bars, size_t n);
+int af_is_bat_bull       (const af_bar_t *bars, size_t n);
+int af_is_butterfly_bull (const af_bar_t *bars, size_t n);
+int af_is_crab_bull      (const af_bar_t *bars, size_t n);
+
 /* Match record produced by af_scan_patterns. */
 typedef struct {
     int         bar_index;

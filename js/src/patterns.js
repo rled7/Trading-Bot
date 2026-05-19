@@ -299,6 +299,76 @@ export function isInverseHeadAndShoulders(bars) {
     return 0;
 }
 
+function fibRatio(a, b, target, tol) {
+    if (Math.abs(a) < 1e-12) return false;
+    return Math.abs(b / a - target) <= tol;
+}
+
+function isGartleyBull(bars) {
+    const n = bars.length;
+    if (n < 50) return 0;
+    const x  = minRange(bars, n - 50, n - 40);
+    const a  = maxRange(bars, n - 40, n - 30);
+    const bb = minRange(bars, n - 30, n - 20);
+    const cc = maxRange(bars, n - 20, n - 10);
+    const d  = minRange(bars, n - 10, n - 1);
+    const xa = a - x, ab = a - bb, bc = cc - bb, cd = cc - d;
+    if (xa > 1e-6 && bc > 1e-6 &&
+        fibRatio(xa, ab, 0.618, 0.05) &&
+        (fibRatio(bc, cd, 1.272, 0.07) || fibRatio(bc, cd, 1.618, 0.07)))
+        return 1;
+    return 0;
+}
+
+function isGartleyBear(bars) {
+    const n = bars.length;
+    if (n < 50) return 0;
+    const x  = maxRange(bars, n - 50, n - 40);
+    const a  = minRange(bars, n - 40, n - 30);
+    const bb = maxRange(bars, n - 30, n - 20);
+    const cc = minRange(bars, n - 20, n - 10);
+    const d  = maxRange(bars, n - 10, n - 1);
+    const xa = x - a, ab = bb - a, bc = bb - cc, cd = d - cc;
+    if (xa > 1e-6 && bc > 1e-6 &&
+        fibRatio(xa, ab, 0.618, 0.05) &&
+        (fibRatio(bc, cd, 1.272, 0.07) || fibRatio(bc, cd, 1.618, 0.07)))
+        return -1;
+    return 0;
+}
+
+function isBatBull(bars) {
+    const n = bars.length;
+    if (n < 50) return 0;
+    const x  = minRange(bars, n - 50, n - 40);
+    const a  = maxRange(bars, n - 40, n - 30);
+    const d  = minRange(bars, n - 10, n - 1);
+    const xa = a - x, xd = a - d;
+    if (xa > 1e-6 && fibRatio(xa, xd, 0.886, 0.05)) return 1;
+    return 0;
+}
+
+function isButterflyBull(bars) {
+    const n = bars.length;
+    if (n < 50) return 0;
+    const x  = minRange(bars, n - 50, n - 40);
+    const a  = maxRange(bars, n - 40, n - 30);
+    const d  = minRange(bars, n - 10, n - 1);
+    const xa = a - x, xd = a - d;
+    if (xa > 1e-6 && fibRatio(xa, xd, 1.272, 0.07)) return 1;
+    return 0;
+}
+
+function isCrabBull(bars) {
+    const n = bars.length;
+    if (n < 50) return 0;
+    const x  = minRange(bars, n - 50, n - 40);
+    const a  = maxRange(bars, n - 40, n - 30);
+    const d  = minRange(bars, n - 10, n - 1);
+    const xa = a - x, xd = a - d;
+    if (xa > 1e-6 && fibRatio(xa, xd, 1.618, 0.07)) return 1;
+    return 0;
+}
+
 export class PatternMatch {
     constructor(barIndex, name, signal) {
         this.barIndex = barIndex;
@@ -355,6 +425,14 @@ export function scanPatterns(bars) {
         let s;
         if ((s = isHeadAndShoulders(bars)))        out.push(new PatternMatch(last, "head_and_shoulders",         s));
         if ((s = isInverseHeadAndShoulders(bars))) out.push(new PatternMatch(last, "inverse_head_and_shoulders", s));
+    }
+    if (bars.length >= 50) {
+        let s;
+        if ((s = isGartleyBull(bars)))    out.push(new PatternMatch(last, "gartley_bull",    s));
+        if ((s = isGartleyBear(bars)))    out.push(new PatternMatch(last, "gartley_bear",    s));
+        if ((s = isBatBull(bars)))        out.push(new PatternMatch(last, "bat_bull",        s));
+        if ((s = isButterflyBull(bars)))  out.push(new PatternMatch(last, "butterfly_bull",  s));
+        if ((s = isCrabBull(bars)))       out.push(new PatternMatch(last, "crab_bull",       s));
     }
     return out;
 }
