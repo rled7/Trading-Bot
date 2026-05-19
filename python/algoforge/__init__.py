@@ -14,6 +14,32 @@ from .algorithms import (
     SwingTrader,
     TrendFollower,
 )
+from .analysis import (
+    # enums
+    TrendState,
+    TrendBias,
+    VolRegime,
+    SessionType,
+    PatternCategory,
+    # result dataclasses
+    StructureResult,
+    TrendClassification,
+    ConfluenceScore,
+    SessionScore,
+    RegimeResult,
+    MTFResult,
+    # analysis classes
+    MarketStructure,
+    TrendClassifier,
+    ConfluenceScorer,
+    RegimeClassifier,
+    MultiTimeframeAnalyzer,
+    # module-level functions
+    eval_session,
+    classify_regime,
+    # constants
+    TF_WEIGHTS,
+)
 
 __all__ = [
     # types
@@ -32,6 +58,30 @@ __all__ = [
     "MeanReversion",
     "SwingTrader",
     "TrendFollower",
+    # analysis enums
+    "TrendState",
+    "TrendBias",
+    "VolRegime",
+    "SessionType",
+    "PatternCategory",
+    # analysis result dataclasses
+    "StructureResult",
+    "TrendClassification",
+    "ConfluenceScore",
+    "SessionScore",
+    "RegimeResult",
+    "MTFResult",
+    # analysis classes
+    "MarketStructure",
+    "TrendClassifier",
+    "ConfluenceScorer",
+    "RegimeClassifier",
+    "MultiTimeframeAnalyzer",
+    # analysis functions
+    "eval_session",
+    "classify_regime",
+    # analysis constants
+    "TF_WEIGHTS",
     # version
     "__version__",
 ]
