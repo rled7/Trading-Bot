@@ -180,4 +180,47 @@ af_error_t af_ichimoku(const double *high, const double *low, const double *clos
                        double *tenkan_out, double *kijun_out,
                        double *senkou_a, double *senkou_b_out, double *chikou);
 
+/* ── Indicator engine ─────────────────────────────────────────────────────
+ * Runs all indicators on a bar array and returns a compact summary result
+ * with scalar values used by the algorithm layer and backtest engine.
+ * Mirrors the C++ EngineResult / IndicatorEngine interface.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+#define AF_IND_MAX_INDICATORS 64
+
+typedef struct {
+    char   name[32];
+    int    valid;       /* 1 if the indicator produced a value */
+    int    signal;      /* +1 bullish / 0 neutral / -1 bearish */
+    double value;       /* primary scalar */
+    double value2;      /* secondary (e.g. signal line) */
+    double value3;      /* tertiary  (e.g. histogram) */
+} af_indicator_result_t;
+
+typedef struct {
+    af_indicator_result_t indicators[AF_IND_MAX_INDICATORS];
+    int                   indicator_count;
+
+    /* Quick-access scalars for the algo/backtest layer */
+    double atr_value;   /* current ATR; >0 when valid */
+    double adx_value;
+    double rsi_value;   /* default 50 when not yet valid */
+    double vwap_value;
+
+    /* Signal summary */
+    int bullish;
+    int bearish;
+    int neutral;
+} af_engine_result_t;
+
+/**
+ * af_run_indicators — runs all registered indicators on bars[0..count-1].
+ * bars[0] = oldest, bars[count-1] = newest.
+ * Returns a populated af_engine_result_t; scalar fields default to 0 / 50
+ * when there is insufficient data.
+ */
+af_engine_result_t af_run_indicators(const af_bar_t *bars, size_t count,
+                                      const char *symbol,
+                                      af_timeframe_t tf);
+
 #endif /* AF_INDICATORS_H */

@@ -531,3 +531,30 @@ def scan_patterns(bars: Sequence[Bar]) -> list[PatternMatch]:
         if (s := is_crab_bull(bars)):
             out.append(PatternMatch(last, "crab_bull", s))
     return out
+
+
+# ══ Engine wrapper ════════════════════════════════════════════════════════════
+
+class PatternEngine:
+    """Thin wrapper around :func:`scan_patterns` for use by BacktestEngine.
+
+    Usage::
+
+        engine = PatternEngine()
+        matches = engine.scan(bars, idx)   # list[PatternMatch] at bars[idx]
+    """
+
+    def scan(self, bars: Sequence[Bar], idx: int) -> list[PatternMatch]:
+        """Return pattern matches computed over bars[0..idx] (inclusive).
+
+        Only uses bars up to *idx* to avoid look-ahead.
+        """
+        return scan_patterns(bars[: idx + 1])
+
+    def has_bullish(self, bars: Sequence[Bar], idx: int) -> bool:
+        """Return True if any bullish pattern (+1) is detected at *idx*."""
+        return any(m.signal > 0 for m in self.scan(bars, idx))
+
+    def has_bearish(self, bars: Sequence[Bar], idx: int) -> bool:
+        """Return True if any bearish pattern (-1) is detected at *idx*."""
+        return any(m.signal < 0 for m in self.scan(bars, idx))

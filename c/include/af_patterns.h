@@ -73,4 +73,51 @@ typedef struct {
 size_t af_scan_patterns(const af_bar_t *bars, size_t n,
                          af_pattern_match_t *out, size_t out_cap);
 
+/* ── Pattern engine result ────────────────────────────────────────────────
+ * Aggregated pattern scan result used by the algorithm and backtest layers.
+ * Mirrors the C++ AF_PatternResult / PatternEngine::scan() interface.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+typedef enum {
+    AF_PAT_CANDLESTICK = 0,
+    AF_PAT_CHART,
+    AF_PAT_HARMONIC,
+    AF_PAT_ELLIOTT,
+    AF_PAT_WYCKOFF,
+    AF_PAT_VOLUME
+} AF_PatternCategory;
+
+typedef enum {
+    AF_PAT_DIR_BULLISH =  1,
+    AF_PAT_DIR_BEARISH = -1,
+    AF_PAT_DIR_NEUTRAL =  0
+} AF_PatternDirection;
+
+typedef struct {
+    char               name[64];
+    AF_PatternCategory category;
+    AF_PatternDirection direction;
+    double             confidence;  /* 0.0 – 1.0 */
+    int                bar_index;   /* bar where pattern completes */
+} AF_PatternMatch;
+
+#define AF_MAX_PATTERN_MATCHES 64
+
+typedef struct {
+    AF_PatternMatch matches[AF_MAX_PATTERN_MATCHES];
+    int             count;
+    int             bullish_count;
+    int             bearish_count;
+} AF_PatternResult;
+
+static inline int af_pattern_net(const AF_PatternResult *r) {
+    return r->bullish_count - r->bearish_count;
+}
+
+/**
+ * af_pattern_engine_scan — runs all pattern detectors on bars[0..count-1]
+ * and returns a populated AF_PatternResult.  Mirrors PatternEngine::scan().
+ */
+AF_PatternResult af_pattern_engine_scan(const af_bar_t *bars, size_t count);
+
 #endif /* AF_PATTERNS_H */

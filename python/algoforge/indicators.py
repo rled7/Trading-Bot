@@ -1153,3 +1153,121 @@ def ichimoku(highs: Sequence[float], lows: Sequence[float], closes: Sequence[flo
         out_ch[i - shift] = closes[i]
 
     return out_t, out_k, out_sa, out_sb, out_ch
+
+
+# ══ Engine wrapper ════════════════════════════════════════════════════════════
+
+from dataclasses import dataclass as _dataclass
+from typing import Optional as _Optional
+from .types import Bar as _Bar
+
+
+@_dataclass
+class EngineResult:
+    """Snapshot of computed indicator values at a single bar index.
+
+    All fields may be None when the indicator is not yet defined (warm-up).
+    atr_value is the primary ATR used by BacktestEngine for position sizing.
+    """
+    # ATR (period=14)
+    atr_value:    _Optional[float] = None
+    # RSI (period=14)
+    rsi_value:    _Optional[float] = None
+    # MACD
+    macd_line:    _Optional[float] = None
+    macd_signal:  _Optional[float] = None
+    macd_hist:    _Optional[float] = None
+    # Bollinger Bands (period=20, mult=2)
+    bb_upper:     _Optional[float] = None
+    bb_middle:    _Optional[float] = None
+    bb_lower:     _Optional[float] = None
+    # EMA fast/slow (12/26)
+    ema_fast:     _Optional[float] = None
+    ema_slow:     _Optional[float] = None
+    # SMA (period=50)
+    sma_50:       _Optional[float] = None
+    # ADX, +DI, -DI (period=14)
+    adx_value:    _Optional[float] = None
+    adx_pdi:      _Optional[float] = None
+    adx_mdi:      _Optional[float] = None
+    # Stochastic %K, %D (14, 3)
+    stoch_k:      _Optional[float] = None
+    stoch_d:      _Optional[float] = None
+
+
+class IndicatorEngine:
+    """Computes a standard suite of indicators over a bar array.
+
+    Usage::
+
+        engine = IndicatorEngine()
+        result = engine.compute(bars, idx)   # EngineResult at bars[idx]
+    """
+
+    # Default periods matching the C++ IndicatorEngine defaults.
+    ATR_PERIOD:    int   = 14
+    RSI_PERIOD:    int   = 14
+    MACD_FAST:     int   = 12
+    MACD_SLOW:     int   = 26
+    MACD_SIGNAL:   int   = 9
+    BB_PERIOD:     int   = 20
+    BB_MULT:       float = 2.0
+    EMA_FAST:      int   = 12
+    EMA_SLOW:      int   = 26
+    SMA_PERIOD:    int   = 50
+    ADX_PERIOD:    int   = 14
+    STOCH_K:       int   = 14
+    STOCH_D:       int   = 3
+
+    def compute(self, bars: list[_Bar], idx: int) -> EngineResult:
+        """Return indicator values computed over bars[0..idx] (inclusive).
+
+        Only uses bars up to *idx* to avoid look-ahead.
+        """
+        sub = bars[: idx + 1]
+        n   = len(sub)
+
+        highs  = [b.high  for b in sub]
+        lows   = [b.low   for b in sub]
+        closes = [b.close for b in sub]
+
+        def _last(lst: list) -> _Optional[float]:
+            v = lst[-1] if lst else None
+            return v  # may be None
+
+        # ATR
+        atr_vals   = atr(highs, lows, closes, self.ATR_PERIOD)
+        # RSI
+        rsi_vals   = rsi(closes, self.RSI_PERIOD)
+        # MACD
+        ml, ms, mh = macd(closes, self.MACD_FAST, self.MACD_SLOW, self.MACD_SIGNAL)
+        # Bollinger
+        bbu, bbm, bbl = bollinger(closes, self.BB_PERIOD, self.BB_MULT)
+        # EMA fast / slow
+        ema_f      = ema(closes, self.EMA_FAST)
+        ema_s      = ema(closes, self.EMA_SLOW)
+        # SMA 50
+        sma_v      = sma(closes, self.SMA_PERIOD)
+        # ADX
+        adx_v, pdi, mdi = adx(highs, lows, closes, self.ADX_PERIOD)
+        # Stochastic
+        sk, sd     = stochastic(highs, lows, closes, self.STOCH_K, self.STOCH_D)
+
+        return EngineResult(
+            atr_value   = _last(atr_vals),
+            rsi_value   = _last(rsi_vals),
+            macd_line   = _last(ml),
+            macd_signal = _last(ms),
+            macd_hist   = _last(mh),
+            bb_upper    = _last(bbu),
+            bb_middle   = _last(bbm),
+            bb_lower    = _last(bbl),
+            ema_fast    = _last(ema_f),
+            ema_slow    = _last(ema_s),
+            sma_50      = _last(sma_v),
+            adx_value   = _last(adx_v),
+            adx_pdi     = _last(pdi),
+            adx_mdi     = _last(mdi),
+            stoch_k     = _last(sk),
+            stoch_d     = _last(sd),
+        )
