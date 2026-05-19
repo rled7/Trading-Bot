@@ -14,6 +14,15 @@ from .algorithms import (
     SwingTrader,
     TrendFollower,
 )
+from .risk import (
+    SizingMethod,
+    SizeResult,
+    GuardState,
+    GuardStatus,
+    PositionSizer,
+    DrawdownGuard,
+    SignalProcessor,
+)
 from .analysis import (
     # enums
     TrendState,
@@ -82,6 +91,14 @@ __all__ = [
     "classify_regime",
     # analysis constants
     "TF_WEIGHTS",
+    # risk
+    "SizingMethod",
+    "SizeResult",
+    "GuardState",
+    "GuardStatus",
+    "PositionSizer",
+    "DrawdownGuard",
+    "SignalProcessor",
     # version
     "__version__",
 ]
