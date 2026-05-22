@@ -111,4 +111,4 @@ class IBroker {
     pollSlTp()                                                  { /* optional */ }
 }
 
-module.exports = { IBroker, OrderType, Direction, Tick, AccountInfo, SymbolInfo, Order, Position };
+export { IBroker, OrderType, Direction, Tick, AccountInfo, SymbolInfo, Order, Position };

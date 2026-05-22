@@ -8,8 +8,8 @@
  * P&L: (exit − open) × lots × 100 000.
  */
 
-const { IBroker, OrderType, Direction, Tick, AccountInfo,
-        SymbolInfo, Order, Position } = require('./broker');
+import { IBroker, OrderType, Direction, Tick, AccountInfo,
+         SymbolInfo, Order, Position } from './broker.js';
 
 const PAIRS = [
     { sym: 'EURUSD', start: 1.08500, vol: 0.0080, seed:  1 },
@@ -234,4 +234,4 @@ function makePaperBroker(balance = 10_000) {
     return new PaperBroker(balance);
 }
 
-module.exports = { PaperBroker, makePaperBroker };
+export { PaperBroker, makePaperBroker };
