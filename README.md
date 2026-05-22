@@ -85,10 +85,17 @@ the C++ reference to the three remaining languages (C, Python, JS).
 | R10 | Risk & execution (sizer, SL/TP, drawdown guard) | ❌ | ⚠️ | ❌ | ❌ | Planned |
 | R11 | 24/7 ops (Docker, structured logs, Telegram alerts) | ❌ | ❌ | ❌ | ❌ | Planned |
 | R12 | Live MT5 connectivity | ❌ | ❌ | ✅¹ | ❌ | Planned |
-| S1–S5 | AI algo gen, local LLM, web dashboard, multi-broker | — | — | — | — | Stretch |
+| S3 | Web dashboard (FastAPI + static UI, Python-hosted) | — | — | ✅² | — | **Complete** |
+| S1, S2, S4, S5 | AI algo gen, local LLM, advanced analysis, multi-broker | — | — | — | — | Stretch |
 
 ¹ Python has the `MetaTrader5` package wired — live test requires Windows + MT5 terminal.
 See **[docs/mt5_setup.md](docs/mt5_setup.md)** for prerequisites, environment variables (`MT5_PATH`, `MT5_SERVER`, `MT5_LOGIN`, `MT5_PASSWORD`), a usage snippet, and troubleshooting tips.
+
+² Read-only monitoring dashboard hosted by the Python implementation. FastAPI backend +
+static HTML/JS frontend (no build step). Install with `pip install -e ".[dashboard]"` from
+`python/`, then run `python -m algoforge.dashboard --port 8000`. Set `AF_DASHBOARD_TOKEN`
+in env to enable bearer-token auth. UI shows account state, positions, orders, live ticks
+(SSE), recent bars (Chart.js), and structured log tail.
 
 Legend: ✅ complete · ⚠️ partial · ❌ not started · — not planned for this round
 

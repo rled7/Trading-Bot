@@ -1,0 +1,396 @@
+/* ============================================================
+   AlgoForge Dashboard — dark-mode monospace theme
+   ============================================================ */
+
+/* ---- Reset & base ---- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg:          #0e1117;
+  --bg-card:     #161b22;
+  --bg-header:   #0d1117;
+  --bg-row-alt:  #1c2230;
+  --border:      #30363d;
+  --text:        #c9d1d9;
+  --text-muted:  #8b949e;
+  --text-head:   #e6edf3;
+  --accent:      #58a6ff;
+  --green:       #3fb950;
+  --red:         #f85149;
+  --yellow:      #d29922;
+  --font:        "Courier New", Courier, monospace;
+  --radius:      6px;
+  --gap:         14px;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ---- Screen-reader only ---- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ============================================================
+   Header
+   ============================================================ */
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.site-title {
+  font-size: 17px;
+  font-weight: bold;
+  color: var(--text-head);
+  letter-spacing: 0.04em;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.token-row {
+  display: flex;
+  gap: 6px;
+}
+
+.token-input {
+  width: 280px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+}
+
+.token-input:focus {
+  border-color: var(--accent);
+}
+
+.btn-save,
+.btn-load {
+  background: #21262d;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-save:hover,
+.btn-load:hover {
+  background: #30363d;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Connection dot */
+.conn-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.conn-dot.conn-ok      { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.conn-dot.conn-err     { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+.conn-dot.conn-unknown { background: var(--text-muted); }
+
+.conn-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ============================================================
+   Banners
+   ============================================================ */
+.banner {
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.banner-error {
+  background: #3d1a1a;
+  color: var(--red);
+  border-bottom: 1px solid var(--red);
+}
+
+.banner-warn {
+  background: #2d2208;
+  color: var(--yellow);
+  border-bottom: 1px solid var(--yellow);
+}
+
+/* ============================================================
+   Dashboard grid
+   ============================================================ */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+  padding: var(--gap);
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+/* Cards that span both columns */
+.card-wide {
+  grid-column: 1 / -1;
+}
+
+/* ============================================================
+   Cards
+   ============================================================ */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  overflow: hidden;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--text-head);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ============================================================
+   Key-value list (health / account)
+   ============================================================ */
+.kv-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+}
+
+.kv-list dt {
+  color: var(--text-muted);
+}
+
+.kv-list dd {
+  color: var(--text-head);
+  font-weight: bold;
+  text-align: right;
+}
+
+/* ============================================================
+   Tables
+   ============================================================ */
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+thead th {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+  padding: 5px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+thead th.num,
+tbody td.num {
+  text-align: right;
+}
+
+tbody tr {
+  border-bottom: 1px solid #1e2530;
+}
+
+tbody tr:nth-child(even) {
+  background: var(--bg-row-alt);
+}
+
+tbody td {
+  padding: 5px 8px;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+tbody tr:hover td {
+  background: #1f2a3a;
+}
+
+.empty-row {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 14px;
+}
+
+/* Profit coloring */
+.profit-pos { color: var(--green); }
+.profit-neg { color: var(--red); }
+.profit-zero { color: var(--text-muted); }
+
+/* Side/type badges */
+.side-long  { color: var(--green); }
+.side-short { color: var(--red); }
+
+/* SSE badge */
+.badge-sse {
+  font-size: 9px;
+  font-weight: normal;
+  background: #1a3a2a;
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 3px;
+  padding: 1px 5px;
+  letter-spacing: 0.06em;
+}
+
+.log-count {
+  font-size: 10px;
+  font-weight: normal;
+  color: var(--text-muted);
+}
+
+/* ============================================================
+   Chart panel
+   ============================================================ */
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.ctrl-select,
+.ctrl-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+}
+
+.ctrl-select:focus,
+.ctrl-input:focus {
+  border-color: var(--accent);
+}
+
+.ctrl-input {
+  width: 70px;
+}
+
+.ctrl-label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.chart-wrap {
+  position: relative;
+  width: 100%;
+  height: 320px;
+}
+
+#price-chart {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ============================================================
+   Logs panel
+   ============================================================ */
+.logs-pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  max-height: 280px;
+  overflow-y: auto;
+  font-family: var(--font);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Log level coloring applied via spans */
+.log-debug   { color: var(--text-muted); }
+.log-info    { color: var(--text); }
+.log-warning { color: var(--yellow); }
+.log-error   { color: var(--red); }
+.log-critical{ color: var(--red); font-weight: bold; }
+
+/* ============================================================
+   Responsive: single column on narrow screens
+   ============================================================ */
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  .card-wide {
+    grid-column: 1;
+  }
+  .token-input {
+    width: 180px;
+  }
+}
