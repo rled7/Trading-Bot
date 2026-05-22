@@ -88,6 +88,7 @@ the C++ reference to the three remaining languages (C, Python, JS).
 | S1–S5 | AI algo gen, local LLM, web dashboard, multi-broker | — | — | — | — | Stretch |
 
 ¹ Python has the `MetaTrader5` package wired — live test requires Windows + MT5 terminal.
+See **[docs/mt5_setup.md](docs/mt5_setup.md)** for prerequisites, environment variables (`MT5_PATH`, `MT5_SERVER`, `MT5_LOGIN`, `MT5_PASSWORD`), a usage snippet, and troubleshooting tips.
 
 Legend: ✅ complete · ⚠️ partial · ❌ not started · — not planned for this round
 

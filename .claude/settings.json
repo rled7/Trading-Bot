@@ -1,7 +1,6 @@
 {
   "skillOverrides": {
     "cc-skill-backend-patterns": "on",
-    "docker-patterns": "on",
     "docker-expert": "on",
     "generating-docker-compose-files": "on",
     "dockerfile-generator": "on",
@@ -14,6 +13,9 @@
     "devops": "on",
     "setting-up-log-aggregation": "on",
     "generating-unit-tests": "on",
-    "pytest-skill": "on"
+    "pytest-skill": "on",
+    "javascript-pro": "on",
+    "cpp-pro": "on",
+    "cpp-coding-standards": "on"
   }
 }

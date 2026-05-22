@@ -62,4 +62,10 @@ struct af_broker_s {
 /* Factory — allocates and returns a fully wired paper broker. */
 af_broker_t *af_make_paper_broker(double balance);
 
+/* Factory — allocates and returns a fully wired MT5 broker stub.
+ * Returns a vtable whose methods all yield AF_ERR_NOT_CONNECTED;
+ * real MT5 connectivity in C requires linking the MetaTrader 5 DLL,
+ * which is not part of this repo. Use the Python port for live MT5. */
+af_broker_t *af_make_mt5_broker(void);
+
 #endif /* AF_BROKER_H */
