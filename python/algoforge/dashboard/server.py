@@ -17,11 +17,12 @@ import asyncio
 import dataclasses
 import json
 import time
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Iterator
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 try:
     from algoforge import __version__ as _VERSION
@@ -29,6 +30,8 @@ except ImportError:
     _VERSION = "0.1.0"
 
 from algoforge.broker import IBroker
+from algoforge.llm.provider import LLMError, LLMProvider
+from algoforge.llm.types import ChatMessage, ChatRequest
 from algoforge.logger import get_logger
 from algoforge.types import Timeframe
 
@@ -105,11 +108,31 @@ def _order_dict(order: Any) -> dict[str, Any]:
 # Factory
 # ---------------------------------------------------------------------------
 
+class _ChatRequestBody(BaseModel):
+    messages: list[dict[str, str]]
+    model: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    seed: int | None = None
+
+
+_LLM_DISABLED_RESP = {"error": "llm_disabled", "detail": "LLM not configured"}
+
+_LLM_ERROR_STATUS: dict[str, int] = {
+    "timeout": 504,
+    "unreachable": 502,
+    "http": 502,
+    "decode": 500,
+    "model_missing": 503,
+}
+
+
 def make_app(
     broker: IBroker,
     *,
     token: str | None = None,
     log_buffer: LogRingBuffer | None = None,
+    llm: LLMProvider | None = None,
 ) -> FastAPI:
     """Create and return the dashboard FastAPI application.
 
@@ -124,6 +147,9 @@ def make_app(
         Optional :class:`LogRingBuffer` whose records are served by
         ``GET /api/logs``.  If ``None``, the logs endpoint always returns
         an empty list.
+    llm:
+        Optional :class:`LLMProvider` instance.  When ``None``, all
+        ``/api/llm/*`` endpoints return 503 with ``{"error":"llm_disabled"}``.
     """
     log = get_logger("dashboard")
     _start_time = time.monotonic()
@@ -259,6 +285,125 @@ def make_app(
 
         return StreamingResponse(
             _generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    # ---- /api/llm/health ----------------------------------------------------
+    @app.get("/api/llm/health", dependencies=_auth_dep)
+    def llm_health() -> dict[str, Any]:
+        if llm is None:
+            raise HTTPException(status_code=503, detail=_LLM_DISABLED_RESP)
+        try:
+            status = llm.health()
+        except LLMError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "down", "detail": exc.message},
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "down", "detail": str(exc)},
+            )
+        if not status.ok:
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "down", "detail": status.error or "unhealthy"},
+            )
+        return {
+            "status": "ok",
+            "host": getattr(llm, "_host", None),
+            "model": status.model,
+            "model_loaded": status.model_loaded,
+        }
+
+    # ---- /api/llm/models ----------------------------------------------------
+    @app.get("/api/llm/models", dependencies=_auth_dep)
+    def llm_models() -> dict[str, Any]:
+        if llm is None:
+            raise HTTPException(status_code=503, detail=_LLM_DISABLED_RESP)
+        try:
+            models = llm.list_models()
+        except LLMError as exc:
+            raise HTTPException(
+                status_code=_LLM_ERROR_STATUS.get(exc.kind, 500),
+                detail={"error": exc.kind, "detail": exc.message},
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail={"error": "internal", "detail": str(exc)})
+        return {"models": [m.name for m in models]}
+
+    # ---- /api/llm/chat (non-streaming) --------------------------------------
+    @app.post("/api/llm/chat", dependencies=_auth_dep)
+    def llm_chat(body: _ChatRequestBody) -> dict[str, Any]:
+        if llm is None:
+            raise HTTPException(status_code=503, detail=_LLM_DISABLED_RESP)
+        if not body.messages:
+            raise HTTPException(status_code=400, detail={"error": "validation", "detail": "messages must not be empty"})
+        try:
+            msgs = [ChatMessage(role=m["role"], content=m["content"]) for m in body.messages]
+        except KeyError as exc:
+            raise HTTPException(status_code=400, detail={"error": "validation", "detail": f"missing key {exc}"})
+        req = ChatRequest(
+            model=body.model or "llama3.1:8b",
+            messages=msgs,
+            temperature=body.temperature if body.temperature is not None else 0.2,
+            max_tokens=body.max_tokens,
+            seed=body.seed,
+        )
+        try:
+            resp = llm.chat(req)
+        except LLMError as exc:
+            raise HTTPException(
+                status_code=_LLM_ERROR_STATUS.get(exc.kind, 500),
+                detail={"error": exc.kind, "detail": exc.message},
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail={"error": "internal", "detail": str(exc)})
+        return {
+            "content": resp.message.content,
+            "model": resp.model,
+            "tokens": resp.completion_tokens,
+        }
+
+    # ---- /api/llm/chat/stream (SSE) -----------------------------------------
+    @app.post("/api/llm/chat/stream", dependencies=_auth_dep)
+    async def llm_chat_stream(body: _ChatRequestBody) -> StreamingResponse:
+        if llm is None:
+            raise HTTPException(status_code=503, detail=_LLM_DISABLED_RESP)
+        if not body.messages:
+            raise HTTPException(status_code=400, detail={"error": "validation", "detail": "messages must not be empty"})
+        try:
+            msgs = [ChatMessage(role=m["role"], content=m["content"]) for m in body.messages]
+        except KeyError as exc:
+            raise HTTPException(status_code=400, detail={"error": "validation", "detail": f"missing key {exc}"})
+        req = ChatRequest(
+            model=body.model or "llama3.1:8b",
+            messages=msgs,
+            temperature=body.temperature if body.temperature is not None else 0.2,
+            max_tokens=body.max_tokens,
+            seed=body.seed,
+        )
+
+        async def _sse_generator() -> AsyncGenerator[str, None]:
+            try:
+                for chunk in llm.chat_stream(req):
+                    yield f"data: {chunk.delta}\n\n"
+                    if chunk.done:
+                        break
+                yield "data: [DONE]\n\n"
+            except LLMError as exc:
+                err_payload = json.dumps({"error": exc.kind, "detail": exc.message})
+                yield f"data: {err_payload}\n\n"
+            except GeneratorExit:
+                return
+
+        return StreamingResponse(
+            _sse_generator(),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
