@@ -69,6 +69,24 @@ set(CPP_SOURCES
   src/learning/learned_block_store.cpp
 )
 
+# ── Analytics sources (S4) ──
+set(ANALYTICS_SOURCES
+  src/analytics/metrics.cpp
+  src/analytics/drawdown.cpp
+  src/analytics/distributions.cpp
+  src/analytics/correlations.cpp
+  src/analytics/montecarlo.cpp
+  src/analytics/walkforward.cpp
+  src/analytics/ml_attribution.cpp
+  src/analytics/factors.cpp
+  src/analytics/streaming.cpp
+  src/analytics/html_report.cpp
+)
+
+add_library(af_lib STATIC ${ANALYTICS_SOURCES})
+target_include_directories(af_lib PUBLIC include)
+set_target_properties(af_lib PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+
 add_library(af_engine STATIC ${C_SOURCES} ${CPP_SOURCES})
 target_include_directories(af_engine PUBLIC include third_party/sqlite3)
 target_link_libraries(af_engine PUBLIC sqlite3 Threads::Threads)
@@ -91,5 +109,14 @@ add_executable(af_tests
   tests/test_learning.cpp)
 target_link_libraries(af_tests PRIVATE af_engine)
 add_test(NAME AlgoForgeTests COMMAND af_tests)
+
+# ── Analytics test suite (S4, standalone) ──
+add_executable(test_analytics
+  tests/test_analytics_main.cpp
+  tests/test_analytics.cpp)
+target_include_directories(test_analytics PRIVATE include tests)
+target_link_libraries(test_analytics PRIVATE af_lib)
+set_target_properties(test_analytics PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME AnalyticsTests COMMAND test_analytics)
 
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")
