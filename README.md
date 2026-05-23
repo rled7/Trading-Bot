@@ -85,9 +85,10 @@ the C++ reference to the three remaining languages (C, Python, JS).
 | R10 | Risk & execution (sizer, SL/TP, drawdown guard) | ❌ | ⚠️ | ❌ | ❌ | Planned |
 | R11 | 24/7 ops (Docker, structured logs, Telegram alerts) | ❌ | ❌ | ❌ | ❌ | Planned |
 | R12 | Live MT5 connectivity | ❌ | ❌ | ✅¹ | ❌ | Planned |
+| S2 | Local LLM via Ollama (trade rationale, backtest commentary, news sentiment, strategy describe) + dashboard chat panel | ✅⁴ | ✅⁴ | ✅⁴ | ✅⁴ | **Complete** |
 | S3 | Web dashboard (FastAPI + static UI, Python-hosted) | — | — | ✅² | — | **Complete** |
 | S4 | Advanced analytics (14 metrics, drawdown episodes, distributions, correlations, Monte Carlo, walk-forward, OLS attribution, factor regression, online streaming, HTML report) | ✅³ | ✅³ | ✅³ | ✅³ | **Complete** |
-| S1, S2, S5 | AI algo gen, local LLM, multi-broker | — | — | — | — | Stretch |
+| S1, S5 | AI algo gen, multi-broker | — | — | — | — | Stretch |
 
 ¹ Python has the `MetaTrader5` package wired — live test requires Windows + MT5 terminal.
 See **[docs/mt5_setup.md](docs/mt5_setup.md)** for prerequisites, environment variables (`MT5_PATH`, `MT5_SERVER`, `MT5_LOGIN`, `MT5_PASSWORD`), a usage snippet, and troubleshooting tips.
@@ -103,7 +104,15 @@ S3 dashboard via `algoforge.analytics.dashboard.make_router`.
 static HTML/JS frontend (no build step). Install with `pip install -e ".[dashboard]"` from
 `python/`, then run `python -m algoforge.dashboard --port 8000`. Set `AF_DASHBOARD_TOKEN`
 in env to enable bearer-token auth. UI shows account state, positions, orders, live ticks
-(SSE), recent bars (Chart.js), and structured log tail.
+(SSE), recent bars (Chart.js), structured log tail, and an optional LLM chat panel (S2).
+
+⁴ Full cross-language LLM layer with byte-identical prompts and shared canonical fixtures
+across all four implementations. Shared spec and fixtures live in
+**[docs/llm_spec.md](docs/llm_spec.md)**; setup instructions in
+**[docs/llm_setup.md](docs/llm_setup.md)**. Default model: `llama3.1:8b` via local Ollama
+(`AF_LLM_HOST`, `AF_LLM_MODEL`). Use cases: `trade_rationale`, `backtest_commentary`,
+`news_sentiment`, `strategy_describe`. The Python dashboard exposes a collapsible chat
+panel via `/api/llm/*` (health, models, chat, chat/stream SSE).
 
 Legend: ✅ complete · ⚠️ partial · ❌ not started · — not planned for this round
 
