@@ -12,7 +12,8 @@ BIN_TEST  := $(BUILD)/af_tests
 
 # Library sources = everything in src/ except entry-points.
 LIB_SRCS  := $(filter-out $(SRC)/main.c $(SRC)/bench.c,$(wildcard $(SRC)/*.c))
-TEST_SRCS := $(wildcard $(TESTS)/*.c)
+# test_risk.c embeds its own main() and links src files directly; exclude from combined suite.
+TEST_SRCS := $(filter-out $(TESTS)/test_risk.c,$(wildcard $(TESTS)/*.c))
 
 .PHONY: all bin bench test clean
 all: bin
