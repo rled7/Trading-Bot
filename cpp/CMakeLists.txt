@@ -119,4 +119,27 @@ target_link_libraries(test_analytics PRIVATE af_lib)
 set_target_properties(test_analytics PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME AnalyticsTests COMMAND test_analytics)
 
+# ── LLM sources (S2) ──
+set(LLM_SOURCES
+  src/llm/json.cpp
+  src/llm/ollama.cpp
+  src/llm/prompts.cpp
+  src/llm/use_cases.cpp
+)
+
+add_library(af_llm STATIC ${LLM_SOURCES})
+target_include_directories(af_llm PUBLIC include PRIVATE src/llm)
+set_target_properties(af_llm PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+
+# ── LLM test suite (S2, standalone) ──
+add_executable(test_llm
+  tests/test_llm_main.cpp
+  tests/test_llm.cpp
+  tests/llm_mock.cpp)
+target_include_directories(test_llm PRIVATE include tests src/llm)
+target_link_libraries(test_llm PRIVATE af_llm)
+set_target_properties(test_llm PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME LLMTests COMMAND test_llm
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")
