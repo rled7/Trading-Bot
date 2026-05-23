@@ -1,0 +1,75 @@
+{
+  "name": "chat_streaming",
+  "request": {
+    "body": {
+      "messages": [
+        {
+          "content": "You are a trading assistant.",
+          "role": "system"
+        },
+        {
+          "content": "What is RSI?",
+          "role": "user"
+        }
+      ],
+      "model": "llama3.1:8b",
+      "options": {
+        "num_predict": 256,
+        "seed": 42,
+        "temperature": 0.2
+      },
+      "stream": true
+    },
+    "method": "POST",
+    "path": "/api/chat"
+  },
+  "response": {
+    "body": [
+      {
+        "done": false,
+        "message": {
+          "content": "RSI",
+          "role": "assistant"
+        },
+        "model": "llama3.1:8b"
+      },
+      {
+        "done": false,
+        "message": {
+          "content": " is",
+          "role": "assistant"
+        },
+        "model": "llama3.1:8b"
+      },
+      {
+        "done": false,
+        "message": {
+          "content": " a momentum",
+          "role": "assistant"
+        },
+        "model": "llama3.1:8b"
+      },
+      {
+        "done": false,
+        "message": {
+          "content": " oscillator.",
+          "role": "assistant"
+        },
+        "model": "llama3.1:8b"
+      },
+      {
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 120,
+        "message": {
+          "content": "",
+          "role": "assistant"
+        },
+        "model": "llama3.1:8b",
+        "prompt_eval_count": 18,
+        "total_duration": 2345678901
+      }
+    ],
+    "status": 200
+  }
+}

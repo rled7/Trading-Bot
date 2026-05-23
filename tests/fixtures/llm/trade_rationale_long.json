@@ -1,0 +1,57 @@
+{
+  "input": {
+    "entry_price": 1.085,
+    "indicators": {
+      "atr": 0.0014,
+      "rsi": 68.2
+    },
+    "patterns": [
+      "BullishFlag",
+      "Hammer"
+    ],
+    "side": "long",
+    "stop_loss": 1.08,
+    "symbol": "EURUSD",
+    "take_profit": 1.095,
+    "timeframe": "H1"
+  },
+  "name": "trade_rationale_long",
+  "request": {
+    "body": {
+      "messages": [
+        {
+          "content": "You are an experienced trading assistant. Given a fired signal, explain in 1\u20133 plain sentences why this trade triggered. Be concrete; reference the indicator values and patterns. Do not give financial advice.",
+          "role": "system"
+        },
+        {
+          "content": "SIGNAL\nsymbol=EURUSD\nside=long\ntimeframe=H1\nentry=1.0850\nsl=1.0800\ntp=1.0950\nindicators={\"atr\":0.0014,\"rsi\":68.2}\npatterns=BullishFlag,Hammer\n\nExplain.",
+          "role": "user"
+        }
+      ],
+      "model": "llama3.1:8b",
+      "options": {
+        "num_predict": 512,
+        "seed": 42,
+        "temperature": 0.2
+      },
+      "stream": false
+    },
+    "method": "POST",
+    "path": "/api/chat"
+  },
+  "response": {
+    "body": {
+      "done": true,
+      "done_reason": "stop",
+      "eval_count": 58,
+      "message": {
+        "content": "The EURUSD long signal fired on H1 as RSI reached 68.2 indicating strong bullish momentum, while the BullishFlag and Hammer patterns confirmed continuation. Entry at 1.0850 offers a favorable risk-reward with the ATR of 0.0014 supporting the move toward the 1.0950 target.",
+        "role": "assistant"
+      },
+      "model": "llama3.1:8b",
+      "prompt_eval_count": 72,
+      "total_duration": 1987654321
+    },
+    "status": 200
+  }
+}

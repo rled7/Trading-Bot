@@ -1,0 +1,65 @@
+{
+  "input": {
+    "entry_rules": [
+      "price crosses above EMA20",
+      "RSI above 55",
+      "ATR above 0.001"
+    ],
+    "exit_rules": [
+      "RSI above 75",
+      "price below EMA20"
+    ],
+    "indicators_used": [
+      "EMA20",
+      "EMA50",
+      "ATR14",
+      "RSI14"
+    ],
+    "name": "BreakoutMomentum",
+    "risk_rules": [
+      "max 2% per trade",
+      "stop loss at ATR*1.5",
+      "max 3 open positions"
+    ],
+    "timeframe": "H1"
+  },
+  "name": "strategy_describe_breakout",
+  "request": {
+    "body": {
+      "messages": [
+        {
+          "content": "You are a trading strategy documenter. Given a structured strategy spec, write a 2\u20134 sentence plain-English description suitable for a strategy catalog. Do not invent rules.",
+          "role": "system"
+        },
+        {
+          "content": "STRATEGY\nname=BreakoutMomentum\ntimeframe=H1\nindicators=EMA20,EMA50,ATR14,RSI14\nentry_rules=price crosses above EMA20,RSI above 55,ATR above 0.001\nexit_rules=RSI above 75,price below EMA20\nrisk_rules=max 2% per trade,stop loss at ATR*1.5,max 3 open positions\n\nDescribe.",
+          "role": "user"
+        }
+      ],
+      "model": "llama3.1:8b",
+      "options": {
+        "num_predict": 512,
+        "seed": 42,
+        "temperature": 0.2
+      },
+      "stream": false
+    },
+    "method": "POST",
+    "path": "/api/chat"
+  },
+  "response": {
+    "body": {
+      "done": true,
+      "done_reason": "stop",
+      "eval_count": 72,
+      "message": {
+        "content": "BreakoutMomentum is an H1 trend-following strategy that enters long positions when price crosses above the 20-period EMA, RSI exceeds 55, and ATR confirms sufficient volatility above 0.001. Exits are triggered when RSI rises above 75 indicating overbought conditions or price falls back below the EMA. Risk is strictly controlled at 2% per trade with a 1.5x ATR stop loss and a maximum of 3 concurrent positions.",
+        "role": "assistant"
+      },
+      "model": "llama3.1:8b",
+      "prompt_eval_count": 95,
+      "total_duration": 2567890123
+    },
+    "status": 200
+  }
+}

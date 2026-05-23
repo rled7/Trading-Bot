@@ -1,0 +1,29 @@
+{
+  "name": "complete_basic",
+  "request": {
+    "body": {
+      "model": "llama3.1:8b",
+      "options": {
+        "num_predict": 256,
+        "seed": 42,
+        "temperature": 0.2
+      },
+      "prompt": "Why did EURUSD break out?",
+      "stream": false
+    },
+    "method": "POST",
+    "path": "/api/generate"
+  },
+  "response": {
+    "body": {
+      "done": true,
+      "done_reason": "stop",
+      "eval_count": 84,
+      "model": "llama3.1:8b",
+      "prompt_eval_count": 12,
+      "response": "EURUSD broke out because of strong US dollar momentum driven by hawkish Fed rhetoric.",
+      "total_duration": 1234567890
+    },
+    "status": 200
+  }
+}

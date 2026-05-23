@@ -1,0 +1,25 @@
+{
+  "name": "list_models",
+  "request": {
+    "body": null,
+    "method": "GET",
+    "path": "/api/tags"
+  },
+  "response": {
+    "body": {
+      "models": [
+        {
+          "modified_at": "2024-07-15T10:30:00Z",
+          "name": "llama3.1:8b",
+          "size": 4661211808
+        },
+        {
+          "modified_at": "2024-07-10T08:00:00Z",
+          "name": "nomic-embed-text",
+          "size": 274302144
+        }
+      ]
+    },
+    "status": 200
+  }
+}

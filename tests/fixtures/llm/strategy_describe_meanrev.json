@@ -1,0 +1,64 @@
+{
+  "input": {
+    "entry_rules": [
+      "price touches lower band",
+      "RSI below 35",
+      "price below VWAP"
+    ],
+    "exit_rules": [
+      "price reverts to midband",
+      "RSI above 50"
+    ],
+    "indicators_used": [
+      "BollingerBands20",
+      "RSI14",
+      "VWAP"
+    ],
+    "name": "MeanReversionBand",
+    "risk_rules": [
+      "max 1.5% per trade",
+      "stop below lower band",
+      "daily loss limit 3%"
+    ],
+    "timeframe": "M30"
+  },
+  "name": "strategy_describe_meanrev",
+  "request": {
+    "body": {
+      "messages": [
+        {
+          "content": "You are a trading strategy documenter. Given a structured strategy spec, write a 2\u20134 sentence plain-English description suitable for a strategy catalog. Do not invent rules.",
+          "role": "system"
+        },
+        {
+          "content": "STRATEGY\nname=MeanReversionBand\ntimeframe=M30\nindicators=BollingerBands20,RSI14,VWAP\nentry_rules=price touches lower band,RSI below 35,price below VWAP\nexit_rules=price reverts to midband,RSI above 50\nrisk_rules=max 1.5% per trade,stop below lower band,daily loss limit 3%\n\nDescribe.",
+          "role": "user"
+        }
+      ],
+      "model": "llama3.1:8b",
+      "options": {
+        "num_predict": 512,
+        "seed": 42,
+        "temperature": 0.2
+      },
+      "stream": false
+    },
+    "method": "POST",
+    "path": "/api/chat"
+  },
+  "response": {
+    "body": {
+      "done": true,
+      "done_reason": "stop",
+      "eval_count": 70,
+      "message": {
+        "content": "MeanReversionBand is a mean-reversion strategy on the M30 timeframe that takes long entries when price touches the lower Bollinger Band, RSI falls below 35, and price is below VWAP. Positions are closed when price reverts to the middle Bollinger Band or RSI recovers above 50. Risk management caps each trade at 1.5% with stops placed below the lower band and a 3% daily loss limit.",
+        "role": "assistant"
+      },
+      "model": "llama3.1:8b",
+      "prompt_eval_count": 97,
+      "total_duration": 2456789012
+    },
+    "status": 200
+  }
+}

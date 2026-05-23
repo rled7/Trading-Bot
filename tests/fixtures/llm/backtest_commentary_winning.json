@@ -1,0 +1,53 @@
+{
+  "input": {
+    "best_trade": 0.0312,
+    "max_drawdown": -0.0812,
+    "period": "2024-01-01 \u2192 2024-06-30",
+    "sharpe": 1.82,
+    "sortino": 2.45,
+    "strategy_name": "MomentumBreakout",
+    "total_return": 0.2341,
+    "trade_count": 147,
+    "win_rate": 0.62,
+    "worst_trade": -0.0198
+  },
+  "name": "backtest_commentary_winning",
+  "request": {
+    "body": {
+      "messages": [
+        {
+          "content": "You are an experienced quant analyst. Given a backtest summary, write a 3\u20135 sentence narrative covering: overall result, risk-adjusted performance, drawdown behavior, and one concrete improvement suggestion. Plain prose, no bullet points.",
+          "role": "system"
+        },
+        {
+          "content": "BACKTEST\nstrategy=MomentumBreakout\nperiod=2024-01-01 \u2192 2024-06-30\ntotal_return=0.2341\nsharpe=1.8200\nsortino=2.4500\nmax_drawdown=-0.0812\nwin_rate=0.6200\ntrade_count=147\nbest_trade=0.0312\nworst_trade=-0.0198\n\nComment.",
+          "role": "user"
+        }
+      ],
+      "model": "llama3.1:8b",
+      "options": {
+        "num_predict": 512,
+        "seed": 42,
+        "temperature": 0.2
+      },
+      "stream": false
+    },
+    "method": "POST",
+    "path": "/api/chat"
+  },
+  "response": {
+    "body": {
+      "done": true,
+      "done_reason": "stop",
+      "eval_count": 97,
+      "message": {
+        "content": "MomentumBreakout delivered a strong 23.4% total return over the first half of 2024 with a Sharpe of 1.82 and Sortino of 2.45, indicating excellent risk-adjusted performance. The maximum drawdown of 8.1% was well-contained, and a win rate of 62% across 147 trades shows consistent edge. The best trade of 3.1% and worst of -2.0% reflect a favorable payoff ratio. To improve robustness, consider tightening position sizing during high-volatility regimes to further reduce drawdown depth.",
+        "role": "assistant"
+      },
+      "model": "llama3.1:8b",
+      "prompt_eval_count": 88,
+      "total_duration": 3456789012
+    },
+    "status": 200
+  }
+}

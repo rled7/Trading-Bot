@@ -1,0 +1,41 @@
+{
+  "name": "chat_basic",
+  "request": {
+    "body": {
+      "messages": [
+        {
+          "content": "You are a trading assistant.",
+          "role": "system"
+        },
+        {
+          "content": "Explain ATR.",
+          "role": "user"
+        }
+      ],
+      "model": "llama3.1:8b",
+      "options": {
+        "num_predict": 256,
+        "seed": 42,
+        "temperature": 0.2
+      },
+      "stream": false
+    },
+    "method": "POST",
+    "path": "/api/chat"
+  },
+  "response": {
+    "body": {
+      "done": true,
+      "done_reason": "stop",
+      "eval_count": 120,
+      "message": {
+        "content": "ATR, or Average True Range, measures market volatility by averaging the true range over a period.",
+        "role": "assistant"
+      },
+      "model": "llama3.1:8b",
+      "prompt_eval_count": 18,
+      "total_duration": 2345678901
+    },
+    "status": 200
+  }
+}

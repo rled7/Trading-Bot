@@ -1,0 +1,45 @@
+{
+  "input": {
+    "body": "",
+    "headline": "Recession fears mount as unemployment hits 5-year high"
+  },
+  "name": "news_sentiment_bearish",
+  "request": {
+    "body": {
+      "messages": [
+        {
+          "content": "You are a financial news sentiment classifier. Given a headline (and optional body), respond with exactly one JSON object: {\"sentiment\":\"bullish|bearish|neutral\",\"score\":-1.0..1.0,\"confidence\":0.0..1.0,\"reason\":\"<one short sentence>\"}. No prose outside the JSON.",
+          "role": "system"
+        },
+        {
+          "content": "HEADLINE: Recession fears mount as unemployment hits 5-year high\nBODY: ",
+          "role": "user"
+        }
+      ],
+      "model": "llama3.1:8b",
+      "options": {
+        "num_predict": 512,
+        "seed": 42,
+        "temperature": 0.2
+      },
+      "stream": false
+    },
+    "method": "POST",
+    "path": "/api/chat"
+  },
+  "response": {
+    "body": {
+      "done": true,
+      "done_reason": "stop",
+      "eval_count": 41,
+      "message": {
+        "content": "{\"sentiment\":\"bearish\",\"score\":-0.78,\"confidence\":0.88,\"reason\":\"Rising unemployment signals economic contraction and reduced corporate earnings outlook.\"}",
+        "role": "assistant"
+      },
+      "model": "llama3.1:8b",
+      "prompt_eval_count": 52,
+      "total_duration": 956789012
+    },
+    "status": 200
+  }
+}

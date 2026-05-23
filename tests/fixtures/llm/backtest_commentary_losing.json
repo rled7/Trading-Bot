@@ -1,0 +1,53 @@
+{
+  "input": {
+    "best_trade": 0.0201,
+    "max_drawdown": -0.2341,
+    "period": "2024-01-01 \u2192 2024-06-30",
+    "sharpe": -0.74,
+    "sortino": -0.98,
+    "strategy_name": "MeanReversionEUR",
+    "total_return": -0.1123,
+    "trade_count": 89,
+    "win_rate": 0.41,
+    "worst_trade": -0.0456
+  },
+  "name": "backtest_commentary_losing",
+  "request": {
+    "body": {
+      "messages": [
+        {
+          "content": "You are an experienced quant analyst. Given a backtest summary, write a 3\u20135 sentence narrative covering: overall result, risk-adjusted performance, drawdown behavior, and one concrete improvement suggestion. Plain prose, no bullet points.",
+          "role": "system"
+        },
+        {
+          "content": "BACKTEST\nstrategy=MeanReversionEUR\nperiod=2024-01-01 \u2192 2024-06-30\ntotal_return=-0.1123\nsharpe=-0.7400\nsortino=-0.9800\nmax_drawdown=-0.2341\nwin_rate=0.4100\ntrade_count=89\nbest_trade=0.0201\nworst_trade=-0.0456\n\nComment.",
+          "role": "user"
+        }
+      ],
+      "model": "llama3.1:8b",
+      "options": {
+        "num_predict": 512,
+        "seed": 42,
+        "temperature": 0.2
+      },
+      "stream": false
+    },
+    "method": "POST",
+    "path": "/api/chat"
+  },
+  "response": {
+    "body": {
+      "done": true,
+      "done_reason": "stop",
+      "eval_count": 103,
+      "message": {
+        "content": "MeanReversionEUR posted a loss of 11.2% in H1 2024, with a Sharpe of -0.74 and Sortino of -0.98 indicating poor risk-adjusted returns across all 89 trades. The 23.4% maximum drawdown is alarming and suggests the strategy struggles in trending markets. With a win rate of only 41% and a worst trade of -4.6%, the edge appears insufficient to overcome transaction costs. The most actionable improvement would be adding a trend filter to suppress entries when the broader market is in a sustained directional move.",
+        "role": "assistant"
+      },
+      "model": "llama3.1:8b",
+      "prompt_eval_count": 85,
+      "total_duration": 3678901234
+    },
+    "status": 200
+  }
+}

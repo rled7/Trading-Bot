@@ -1,0 +1,57 @@
+{
+  "input": {
+    "entry_price": 189.5,
+    "indicators": {
+      "ema_fast": 189.45,
+      "ema_slow": 189.8,
+      "rsi": 31.5
+    },
+    "patterns": [
+      "BearishEngulfing"
+    ],
+    "side": "short",
+    "stop_loss": 190.2,
+    "symbol": "GBPJPY",
+    "take_profit": 187.8,
+    "timeframe": "M15"
+  },
+  "name": "trade_rationale_short",
+  "request": {
+    "body": {
+      "messages": [
+        {
+          "content": "You are an experienced trading assistant. Given a fired signal, explain in 1\u20133 plain sentences why this trade triggered. Be concrete; reference the indicator values and patterns. Do not give financial advice.",
+          "role": "system"
+        },
+        {
+          "content": "SIGNAL\nsymbol=GBPJPY\nside=short\ntimeframe=M15\nentry=189.5000\nsl=190.2000\ntp=187.8000\nindicators={\"ema_fast\":189.45,\"ema_slow\":189.8,\"rsi\":31.5}\npatterns=BearishEngulfing\n\nExplain.",
+          "role": "user"
+        }
+      ],
+      "model": "llama3.1:8b",
+      "options": {
+        "num_predict": 512,
+        "seed": 42,
+        "temperature": 0.2
+      },
+      "stream": false
+    },
+    "method": "POST",
+    "path": "/api/chat"
+  },
+  "response": {
+    "body": {
+      "done": true,
+      "done_reason": "stop",
+      "eval_count": 52,
+      "message": {
+        "content": "GBPJPY short triggered on M15 as RSI of 31.5 shows oversold momentum confirming the BearishEngulfing pattern. The fast EMA at 189.45 has crossed below the slow EMA at 189.80, signalling bearish divergence at the entry of 189.50.",
+        "role": "assistant"
+      },
+      "model": "llama3.1:8b",
+      "prompt_eval_count": 68,
+      "total_duration": 1654321987
+    },
+    "status": 200
+  }
+}

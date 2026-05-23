@@ -1,0 +1,14 @@
+{
+  "name": "health_down",
+  "request": {
+    "body": null,
+    "method": "GET",
+    "path": "/"
+  },
+  "response": {
+    "body": {
+      "error": "service unavailable"
+    },
+    "status": 503
+  }
+}

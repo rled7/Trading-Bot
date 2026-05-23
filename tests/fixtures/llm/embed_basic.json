@@ -1,0 +1,23 @@
+{
+  "name": "embed_basic",
+  "request": {
+    "body": {
+      "model": "nomic-embed-text",
+      "prompt": "EURUSD broke out"
+    },
+    "method": "POST",
+    "path": "/api/embeddings"
+  },
+  "response": {
+    "body": {
+      "embedding": [
+        0.123,
+        -0.456,
+        0.789,
+        -0.012,
+        0.345
+      ]
+    },
+    "status": 200
+  }
+}
