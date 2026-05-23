@@ -2,6 +2,20 @@ CC      ?= gcc
 CFLAGS  ?= -std=c17 -Wall -Wextra -Werror -O2 -Iinclude
 LDFLAGS ?=
 
+# Auto-detect libcurl; fall back to stub transport if unavailable.
+CURL_CFLAGS :=
+CURL_LDFLAGS :=
+HAVE_CURL := $(shell curl-config --libs 2>/dev/null && echo yes || echo no)
+ifeq ($(HAVE_CURL),yes)
+  CURL_CFLAGS  := $(shell curl-config --cflags 2>/dev/null)
+  CURL_LDFLAGS := $(shell curl-config --libs   2>/dev/null)
+else
+  CURL_CFLAGS  := -DAF_NO_LIBCURL
+endif
+
+CFLAGS  += $(CURL_CFLAGS)
+LDFLAGS += $(CURL_LDFLAGS)
+
 BUILD     := build
 SRC       := src
 TESTS     := tests
