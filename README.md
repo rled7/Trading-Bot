@@ -86,10 +86,18 @@ the C++ reference to the three remaining languages (C, Python, JS).
 | R11 | 24/7 ops (Docker, structured logs, Telegram alerts) | ❌ | ❌ | ❌ | ❌ | Planned |
 | R12 | Live MT5 connectivity | ❌ | ❌ | ✅¹ | ❌ | Planned |
 | S3 | Web dashboard (FastAPI + static UI, Python-hosted) | — | — | ✅² | — | **Complete** |
-| S1, S2, S4, S5 | AI algo gen, local LLM, advanced analysis, multi-broker | — | — | — | — | Stretch |
+| S4 | Advanced analytics (14 metrics, drawdown episodes, distributions, correlations, Monte Carlo, walk-forward, OLS attribution, factor regression, online streaming, HTML report) | ✅³ | ✅³ | ✅³ | ✅³ | **Complete** |
+| S1, S2, S5 | AI algo gen, local LLM, multi-broker | — | — | — | — | Stretch |
 
 ¹ Python has the `MetaTrader5` package wired — live test requires Windows + MT5 terminal.
 See **[docs/mt5_setup.md](docs/mt5_setup.md)** for prerequisites, environment variables (`MT5_PATH`, `MT5_SERVER`, `MT5_LOGIN`, `MT5_PASSWORD`), a usage snippet, and troubleshooting tips.
+
+³ Full cross-language analytics layer with numerical parity (1e-9 tolerance) across all four
+implementations. Shared canonical test vectors live in **[docs/analytics_spec.md](docs/analytics_spec.md)**;
+each language's tests verify against the same vectors and the same seeded LCG sequence. Python
+reference: `python/algoforge/analytics/` — run `python -m algoforge.analytics --backtest results.json
+--out report.html` to render the report. The Python build also exposes streaming metrics over the
+S3 dashboard via `algoforge.analytics.dashboard.make_router`.
 
 ² Read-only monitoring dashboard hosted by the Python implementation. FastAPI backend +
 static HTML/JS frontend (no build step). Install with `pip install -e ".[dashboard]"` from

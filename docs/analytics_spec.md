@@ -346,17 +346,17 @@ Expected:
 - `avg_win = 110.0`, `avg_loss = -58.0`
 - `payoff_ratio = 110.0 / 58.0 = 1.8965517241379310`
 - `profit_factor = 550.0 / 290.0 = 1.8965517241379310`
-- `longest_win_streak = 1`
-- `longest_loss_streak = 2`
+- `longest_win_streak = 2` (trades 7 and 8: `+60, +90`)
+- `longest_loss_streak = 2` (trades 5 and 6: `-100, -40`)
 
 ### Test series B — bar_returns (n=8)
 
 `returns_B = [0.01, -0.005, 0.02, -0.01, 0.015, 0.003, -0.008, 0.012]`
 
 - `mean = 0.004625`
-- `std (sample) = 0.011172066...` (verify in your impl)
-- Sharpe (A = sqrt(252)) = `sqrt(252) * 0.004625 / 0.011172066... = 6.5722...`
-  *(implementations: compute precisely and assert your value matches across all 4 langs to 1e-9)*
+- `std (sample, N-1) = 0.011312919...`
+- Sharpe (A = sqrt(252)) = `sqrt(252) * 0.004625 / 0.011312919... = 6.489889744758411`
+  *(All four implementations must produce this value to 1e-9 tolerance.)*
 - Sortino: only negative entries `[-0.005, -0.01, -0.008]`, downside std (sample, demeaned at 0 per common Sortino convention) = compute precisely.
   *Convention*: downside std = `sqrt(sum(min(r,0)^2) / (n-1))` using **n = full sample size**, demeaned at 0 (not at mean). All 4 implementations must follow this convention.
 
@@ -367,21 +367,27 @@ Expected:
 - `peaks_C = [10000, 10100, 10100, 10200, 10200, 10200, 10200, 10300, 10400]`
 - `max_dd_pct = (9800 - 10200) / 10200 * 100 = -3.9215686274509807`
 - `max_dd_abs = -400`
-- Drawdown episodes: one at indices 2-7 (start_idx=2 just after peak at 1, trough=5, recover=7).
+- Drawdown episodes: **two** distinct episodes (contiguous runs of `dd_pct < 0`):
+  1. Brief dip at idx 2 only (start_idx=2, trough=2, recover_idx=3, depth_abs=-50).
+  2. Deeper episode at idx 4–6 (start_idx=4, trough=5, recover_idx=7, depth_abs=-400).
+- `top5_drawdowns` returns the deeper episode first (sorted by depth_pct ascending).
 
 ### Test series D — Monte Carlo
 
-Inputs: `trades_A`, `n_runs=1000`, `seed=42`. Each language must produce
-the same `p5_final, p50_final, p95_final, prob_of_ruin` values using the
-LCG defined in §4 with `initial_capital=10000`. The first 5 LCG outputs
-from seed=42 must be:
+Inputs: `trades_A`, `n_runs=1000`, `seed=42`, `initial_capital=10000`.
+
+Canonical LCG(seed=42) first 10 uint32 outputs (all four implementations
+must reproduce these exactly):
 ```
-LCG(42) sequence (uint32, first 5 values):
-  TBD — implementations must produce identical sequences
+[1220265334, 484179026, 886563538, 1353769503, 1460606294,
+ 56326156,   46730969,  327394710, 1017823166, 53256125]
 ```
-*(Note: implementations agree on the LCG formula and seed; whichever
-language produces the test vector first sets the value, all others
-must match.)*
+
+Canonical Monte Carlo result for the above inputs:
+- `p5_final  = 9800.0`
+- `p50_final = 10250.0`
+- `p95_final = 10750.5`
+- `prob_of_ruin = 0.0`
 
 ## 6. API conventions per language
 
