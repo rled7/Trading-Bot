@@ -394,3 +394,321 @@ tbody tr:hover td {
     width: 180px;
   }
 }
+
+/* ============================================================
+   LLM Chat Panel — floating bottom-right
+   ============================================================ */
+
+#llm-chat-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: var(--font);
+}
+
+/* Toggle button */
+#llm-toggle-btn {
+  background: #1a2233;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+#llm-toggle-btn:hover {
+  background: #21314a;
+}
+
+/* Expanded chat box */
+#llm-chat-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+
+#llm-chat-box[hidden] {
+  display: none;
+}
+
+/* Header row */
+.llm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-header);
+}
+
+.llm-header-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--text-head);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Status row */
+.llm-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: #0d1117;
+}
+
+.llm-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.llm-status-dot.status-ok      { background: var(--green); box-shadow: 0 0 5px var(--green); }
+.llm-status-dot.status-err     { background: var(--red);   box-shadow: 0 0 5px var(--red); }
+.llm-status-dot.status-unknown { background: var(--text-muted); }
+
+.llm-status-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#llm-reconnect-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 10px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+
+#llm-reconnect-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Model selector */
+.llm-model-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.llm-model-row label {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+#llm-model-select {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 2px 5px;
+  outline: none;
+}
+
+#llm-model-select:focus {
+  border-color: var(--accent);
+}
+
+/* Disabled banner */
+#llm-disabled-banner {
+  padding: 8px 12px;
+  background: #2d1a08;
+  color: var(--yellow);
+  font-size: 11px;
+  border-bottom: 1px solid var(--yellow);
+}
+
+#llm-disabled-banner[hidden] {
+  display: none;
+}
+
+/* Quick-action buttons */
+.llm-quick-row {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.llm-quick-btn {
+  background: #1a2233;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 10px;
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.llm-quick-btn:hover:not(:disabled) {
+  background: #21314a;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.llm-quick-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Message list */
+#llm-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 180px;
+  max-height: 280px;
+}
+
+.llm-msg {
+  max-width: 88%;
+  padding: 5px 9px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.llm-msg-user {
+  align-self: flex-end;
+  background: #1a2e4a;
+  border: 1px solid #2d4a6a;
+  color: var(--text-head);
+}
+
+.llm-msg-assistant {
+  align-self: flex-start;
+  background: #161b22;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.llm-msg-system {
+  align-self: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: italic;
+}
+
+/* Input row */
+.llm-input-row {
+  display: flex;
+  gap: 5px;
+  padding: 7px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-header);
+}
+
+#llm-input {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 4px 7px;
+  resize: none;
+  height: 34px;
+  outline: none;
+}
+
+#llm-input:focus {
+  border-color: var(--accent);
+}
+
+#llm-input:disabled {
+  opacity: 0.4;
+}
+
+.llm-send-btn,
+.llm-abort-btn {
+  background: #1a2233;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+
+.llm-send-btn {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.llm-send-btn:hover:not(:disabled) {
+  background: #21314a;
+}
+
+.llm-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.llm-abort-btn {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.llm-abort-btn:hover {
+  background: #2a1a1a;
+}
+
+.llm-abort-btn[hidden] {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  #llm-chat-box {
+    width: calc(100vw - 40px);
+  }
+}

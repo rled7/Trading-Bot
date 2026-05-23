@@ -596,3 +596,314 @@ function boot() {
 }
 
 boot();
+
+// ============================================================
+// LLM Chat Panel
+// ============================================================
+
+/**
+ * LLM Chat state
+ *
+ * llmState: "unknown" | "ok" | "disabled" | "offline"
+ * activeController: AbortController | null (for in-flight stream)
+ * chatHistory: {role, content}[]  — client-side message history
+ */
+const llm = {
+  state: "unknown",
+  activeController: null,
+  history: [],
+};
+
+// DOM refs for the chat panel
+const llmToggleBtn     = document.getElementById("llm-toggle-btn");
+const llmChatBox       = document.getElementById("llm-chat-box");
+const llmStatusDot     = document.getElementById("llm-status-dot");
+const llmStatusText    = document.getElementById("llm-status-text");
+const llmReconnectBtn  = document.getElementById("llm-reconnect-btn");
+const llmDisabledBanner= document.getElementById("llm-disabled-banner");
+const llmModelSelect   = document.getElementById("llm-model-select");
+const llmMessages      = document.getElementById("llm-messages");
+const llmInput         = document.getElementById("llm-input");
+const llmSendBtn       = document.getElementById("llm-send-btn");
+const llmAbortBtn      = document.getElementById("llm-abort-btn");
+const llmBtnTrade      = document.getElementById("llm-btn-trade");
+const llmBtnBacktest   = document.getElementById("llm-btn-backtest");
+const llmBtnNews       = document.getElementById("llm-btn-news");
+
+// ---- Toggle ----
+
+llmToggleBtn.addEventListener("click", () => {
+  const isOpen = !llmChatBox.hidden;
+  llmChatBox.hidden = isOpen;
+  llmToggleBtn.setAttribute("aria-expanded", String(!isOpen));
+});
+
+// ---- Status helpers ----
+
+function llmSetStatus(state, label) {
+  llm.state = state;
+  llmStatusDot.className = "llm-status-dot";
+  if (state === "ok") {
+    llmStatusDot.classList.add("status-ok");
+  } else if (state === "disabled" || state === "offline") {
+    llmStatusDot.classList.add("status-err");
+  } else {
+    llmStatusDot.classList.add("status-unknown");
+  }
+  llmStatusText.textContent = label;
+}
+
+function llmEnableInteraction(enabled) {
+  llmModelSelect.disabled = !enabled;
+  llmInput.disabled       = !enabled;
+  llmSendBtn.disabled     = !enabled;
+  llmBtnTrade.disabled    = !enabled;
+  llmBtnBacktest.disabled = !enabled;
+  llmBtnNews.disabled     = !enabled;
+}
+
+// ---- Fetch health + models ----
+
+async function llmCheckHealth() {
+  llmReconnectBtn.hidden = true;
+  llmSetStatus("unknown", "Checking...");
+  try {
+    const resp = await fetch("/api/llm/health", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (resp.status === 503) {
+      const body = await resp.json().catch(() => ({}));
+      const detail = body.detail || body;
+      if (detail.error === "llm_disabled") {
+        llmSetStatus("disabled", "Disabled");
+        llmDisabledBanner.hidden = false;
+        llmEnableInteraction(false);
+        return;
+      }
+      // "down" or other
+      llmSetStatus("offline", "Offline");
+      llmDisabledBanner.hidden = true;
+      llmReconnectBtn.hidden = false;
+      llmEnableInteraction(false);
+      return;
+    }
+    if (!resp.ok) {
+      llmSetStatus("offline", "Offline");
+      llmReconnectBtn.hidden = false;
+      llmEnableInteraction(false);
+      return;
+    }
+    const data = await resp.json();
+    const modelName = data.model || "unknown";
+    llmSetStatus("ok", `Online (model: ${modelName})`);
+    llmDisabledBanner.hidden = true;
+    llmReconnectBtn.hidden = true;
+    llmEnableInteraction(true);
+    await llmLoadModels(modelName);
+  } catch (_) {
+    llmSetStatus("offline", "Offline");
+    llmReconnectBtn.hidden = false;
+    llmEnableInteraction(false);
+  }
+}
+
+async function llmLoadModels(defaultModel) {
+  try {
+    const resp = await fetch("/api/llm/models", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const models = Array.isArray(data.models) ? data.models : [];
+    if (models.length === 0) return;
+    llmModelSelect.innerHTML = models
+      .map((m) => `<option value="${m}"${m === defaultModel ? " selected" : ""}>${m}</option>`)
+      .join("");
+    llmModelSelect.disabled = false;
+  } catch (_) {
+    // leave the select as-is
+  }
+}
+
+llmReconnectBtn.addEventListener("click", () => {
+  llmCheckHealth();
+});
+
+// ---- Message rendering ----
+
+function llmAppendMsg(role, text) {
+  const div = document.createElement("div");
+  div.className = `llm-msg llm-msg-${role}`;
+  div.textContent = text;
+  llmMessages.appendChild(div);
+  llmMessages.scrollTop = llmMessages.scrollHeight;
+  return div;
+}
+
+function llmAppendSystem(text) {
+  const div = document.createElement("div");
+  div.className = "llm-msg llm-msg-system";
+  div.textContent = text;
+  llmMessages.appendChild(div);
+  llmMessages.scrollTop = llmMessages.scrollHeight;
+}
+
+// ---- Streaming via fetch + ReadableStream ----
+// EventSource only supports GET, so we use fetch() + ReadableStream consumer.
+
+async function llmSendMessage(userText) {
+  if (!userText.trim()) return;
+  if (llm.activeController) return; // already streaming
+
+  // Add user message to history and DOM
+  llm.history.push({ role: "user", content: userText });
+  llmAppendMsg("user", userText);
+
+  // Build request payload
+  const model = llmModelSelect.value || "llama3.1:8b";
+  const payload = {
+    messages: llm.history.map((m) => ({ role: m.role, content: m.content })),
+    model,
+  };
+
+  // Disable input / show abort
+  llmInput.value = "";
+  llmInput.disabled = true;
+  llmSendBtn.disabled = true;
+  llmAbortBtn.hidden = false;
+  llmBtnTrade.disabled = true;
+  llmBtnBacktest.disabled = true;
+  llmBtnNews.disabled = true;
+
+  // Create assistant bubble for streaming
+  const assistantDiv = llmAppendMsg("assistant", "");
+  let accumulated = "";
+
+  const controller = new AbortController();
+  llm.activeController = controller;
+
+  try {
+    const resp = await fetch("/api/llm/chat/stream", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    if (!resp.ok) {
+      assistantDiv.textContent = `[Error ${resp.status}]`;
+      assistantDiv.classList.add("llm-msg-system");
+    } else {
+      // Consume SSE manually from ReadableStream
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buf += decoder.decode(value, { stream: true });
+
+        // Split on SSE line boundaries: "data: <token>\n\n"
+        const lines = buf.split("\n");
+        // Keep the last (potentially incomplete) fragment
+        buf = lines.pop();
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload_str = line.slice(6); // strip "data: "
+          if (payload_str === "[DONE]") {
+            // Stream finished
+            break;
+          }
+          accumulated += payload_str;
+          assistantDiv.textContent = accumulated;
+          llmMessages.scrollTop = llmMessages.scrollHeight;
+        }
+      }
+
+      // Handle any trailing buffer
+      if (buf.startsWith("data: ")) {
+        const tail = buf.slice(6);
+        if (tail && tail !== "[DONE]") {
+          accumulated += tail;
+          assistantDiv.textContent = accumulated;
+        }
+      }
+    }
+  } catch (err) {
+    if (err.name === "AbortError") {
+      // User aborted — just finalize whatever accumulated
+      if (!accumulated) {
+        assistantDiv.textContent = "[Aborted]";
+        assistantDiv.classList.add("llm-msg-system");
+      }
+    } else {
+      assistantDiv.textContent = `[Error: ${err.message}]`;
+      assistantDiv.classList.add("llm-msg-system");
+    }
+  } finally {
+    llm.activeController = null;
+    llmAbortBtn.hidden = true;
+
+    // Re-enable input only if LLM is still online
+    if (llm.state === "ok") {
+      llmInput.disabled = false;
+      llmSendBtn.disabled = false;
+      llmBtnTrade.disabled = false;
+      llmBtnBacktest.disabled = false;
+      llmBtnNews.disabled = false;
+    }
+
+    // Add assistant reply to history (only non-empty, non-error content)
+    if (accumulated) {
+      llm.history.push({ role: "assistant", content: accumulated });
+    }
+
+    llmMessages.scrollTop = llmMessages.scrollHeight;
+  }
+}
+
+// ---- Abort ----
+
+llmAbortBtn.addEventListener("click", () => {
+  if (llm.activeController) {
+    llm.activeController.abort();
+  }
+});
+
+// ---- Send on button / Enter ----
+
+llmSendBtn.addEventListener("click", () => {
+  llmSendMessage(llmInput.value.trim());
+});
+
+llmInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    llmSendMessage(llmInput.value.trim());
+  }
+});
+
+// ---- Quick-action buttons ----
+
+llmBtnTrade.addEventListener("click", () => {
+  llmSendMessage("Explain why the most recent trade fired.");
+});
+
+llmBtnBacktest.addEventListener("click", () => {
+  llmSendMessage("Summarize my most recent backtest in 3-5 sentences.");
+});
+
+llmBtnNews.addEventListener("click", () => {
+  llmSendMessage("Give me a brief market-sentiment snapshot for EURUSD.");
+});
+
+// ---- Init: check health once on page load ----
+// We intentionally do NOT poll — check once on load and let user reconnect manually.
+
+llmCheckHealth();

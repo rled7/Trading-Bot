@@ -178,6 +178,65 @@
 
   </main>
 
+  <!-- ===== LLM CHAT PANEL ===== -->
+  <div id="llm-chat-panel">
+    <!-- Expanded chat box (hidden by default) -->
+    <div id="llm-chat-box" hidden>
+      <!-- Header -->
+      <div class="llm-header">
+        <span class="llm-header-title">AI Assistant</span>
+      </div>
+
+      <!-- Status row -->
+      <div class="llm-status-row">
+        <span id="llm-status-dot" class="llm-status-dot status-unknown"></span>
+        <span id="llm-status-text" class="llm-status-text">Checking...</span>
+        <button id="llm-reconnect-btn" hidden>Reconnect</button>
+      </div>
+
+      <!-- Disabled banner -->
+      <div id="llm-disabled-banner" hidden>
+        LLM not configured &mdash; see <code>docs/llm_setup.md</code>
+      </div>
+
+      <!-- Model selector -->
+      <div class="llm-model-row">
+        <label for="llm-model-select">Model</label>
+        <select id="llm-model-select" disabled>
+          <option value="">-- none --</option>
+        </select>
+      </div>
+
+      <!-- Quick-action buttons -->
+      <div class="llm-quick-row">
+        <button class="llm-quick-btn" id="llm-btn-trade" disabled>Explain last trade</button>
+        <button class="llm-quick-btn" id="llm-btn-backtest" disabled>Backtest summary</button>
+        <button class="llm-quick-btn" id="llm-btn-news" disabled>News scan</button>
+      </div>
+
+      <!-- Message list -->
+      <div id="llm-messages" role="log" aria-live="polite"></div>
+
+      <!-- Input row -->
+      <div class="llm-input-row">
+        <textarea
+          id="llm-input"
+          placeholder="Ask the AI assistant..."
+          rows="1"
+          disabled
+          aria-label="Chat message"
+        ></textarea>
+        <button class="llm-send-btn" id="llm-send-btn" disabled>Send</button>
+        <button class="llm-abort-btn" id="llm-abort-btn" hidden aria-label="Abort stream">Abort</button>
+      </div>
+    </div>
+
+    <!-- Toggle button (always visible) -->
+    <button id="llm-toggle-btn" aria-expanded="false" aria-controls="llm-chat-box">
+      <span>&#x1F916;</span> Chat
+    </button>
+  </div>
+
   <!-- Chart.js from CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <!-- Dashboard app (ES module) -->
