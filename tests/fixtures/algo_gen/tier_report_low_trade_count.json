@@ -1,0 +1,23 @@
+{
+  "manifest_name": "low-trade-count-test",
+  "passed": false,
+  "tier": null,
+  "stages": [
+    {
+      "stage": 1,
+      "name": "schema_lint",
+      "passed": true,
+      "reason": "OK",
+      "metrics": {}
+    },
+    {
+      "stage": 2,
+      "name": "sandbox_backtest",
+      "passed": false,
+      "reason": "too few trades: 0 < 20",
+      "metrics": {
+        "trades": 0
+      }
+    }
+  ]
+}

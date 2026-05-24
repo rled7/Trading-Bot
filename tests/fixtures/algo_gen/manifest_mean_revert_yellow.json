@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "name": "mean-revert-rsi-bb",
+  "description": "RSI oversold/overbought with Bollinger Band touch.",
+  "rationale": "Mean-reversion in ranging markets using RSI extremes.",
+  "timeframes": [
+    "H1"
+  ],
+  "symbols": [
+    "EURUSD"
+  ],
+  "indicators": [
+    {
+      "id": "rsi14",
+      "kind": "rsi",
+      "params": {
+        "period": 14
+      }
+    },
+    {
+      "id": "bb20",
+      "kind": "bollinger",
+      "params": {
+        "period": 20,
+        "mult": 2.0
+      }
+    },
+    {
+      "id": "atr14",
+      "kind": "atr",
+      "params": {
+        "period": 14
+      }
+    }
+  ],
+  "entries": [
+    {
+      "side": "long",
+      "when": "rsi14 < 35"
+    },
+    {
+      "side": "short",
+      "when": "rsi14 > 65"
+    }
+  ],
+  "exits": [
+    {
+      "side": "long",
+      "sl_atr": 1.5,
+      "tp_atr": 2.0
+    },
+    {
+      "side": "short",
+      "sl_atr": 1.5,
+      "tp_atr": 2.0
+    }
+  ],
+  "risk": {
+    "size": "atr",
+    "atr_mult": 1.5,
+    "fixed_lots": 0.01,
+    "max_concurrent": 1,
+    "hedge": false,
+    "cool_down_bars": 5
+  }
+}

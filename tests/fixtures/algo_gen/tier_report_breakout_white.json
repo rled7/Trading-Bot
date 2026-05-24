@@ -1,0 +1,57 @@
+{
+  "manifest_name": "breakout-sma-momentum",
+  "passed": true,
+  "tier": "white",
+  "min_score": 95.0,
+  "walk_forward": 96.0,
+  "mc_bootstrap": 95.5,
+  "robustness": 95.0,
+  "size_mult": 1.5,
+  "experimental": false,
+  "paper_only": false,
+  "stages": [
+    {
+      "stage": 1,
+      "name": "schema_lint",
+      "passed": true,
+      "reason": "OK",
+      "metrics": {}
+    },
+    {
+      "stage": 2,
+      "name": "sandbox_backtest",
+      "passed": true,
+      "reason": "OK",
+      "metrics": {
+        "trades": 100
+      }
+    },
+    {
+      "stage": 3,
+      "name": "walk_forward",
+      "passed": true,
+      "reason": "5/5 windows passed",
+      "metrics": {
+        "score": 96.0
+      }
+    },
+    {
+      "stage": 4,
+      "name": "mc_bootstrap",
+      "passed": true,
+      "reason": "MC score=95.5%",
+      "metrics": {
+        "score": 95.5
+      }
+    },
+    {
+      "stage": 5,
+      "name": "parameter_robustness",
+      "passed": true,
+      "reason": "Robustness score=95.0%",
+      "metrics": {
+        "score": 95.0
+      }
+    }
+  ]
+}

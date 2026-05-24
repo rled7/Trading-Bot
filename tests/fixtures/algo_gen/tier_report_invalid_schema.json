@@ -1,0 +1,14 @@
+{
+  "manifest_name": "invalid-schema-test",
+  "passed": false,
+  "tier": null,
+  "stages": [
+    {
+      "stage": 1,
+      "name": "schema_lint",
+      "passed": false,
+      "reason": "unknown indicator kind 'nonexistent_indicator'",
+      "metrics": {}
+    }
+  ]
+}

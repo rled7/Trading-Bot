@@ -37,6 +37,7 @@ class AlgoDecision:
 
 class IAlgorithm(ABC):
     _enabled: bool = True
+    metadata: "dict | None" = None   # populated by algo_gen.promote; None for hand-written algos
 
     @abstractmethod
     def name(self) -> str: ...

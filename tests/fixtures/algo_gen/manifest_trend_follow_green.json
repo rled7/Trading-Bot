@@ -1,0 +1,72 @@
+{
+  "schema_version": "1.0",
+  "name": "trend-follow-ema-rsi",
+  "description": "EMA crossover with RSI momentum filter \u2014 designed for green tier.",
+  "rationale": "Uses EMA crossover (fast 9/slow 21) with RSI > 50 filter to capture medium-term trends on H1.",
+  "timeframes": [
+    "H1"
+  ],
+  "symbols": [
+    "EURUSD"
+  ],
+  "indicators": [
+    {
+      "id": "ema9",
+      "kind": "ema",
+      "params": {
+        "period": 9
+      }
+    },
+    {
+      "id": "ema21",
+      "kind": "ema",
+      "params": {
+        "period": 21
+      }
+    },
+    {
+      "id": "rsi14",
+      "kind": "rsi",
+      "params": {
+        "period": 14
+      }
+    },
+    {
+      "id": "atr14",
+      "kind": "atr",
+      "params": {
+        "period": 14
+      }
+    }
+  ],
+  "entries": [
+    {
+      "side": "long",
+      "when": "ema9 > ema21 and rsi14 > 50"
+    },
+    {
+      "side": "short",
+      "when": "ema9 < ema21 and rsi14 < 50"
+    }
+  ],
+  "exits": [
+    {
+      "side": "long",
+      "sl_atr": 1.5,
+      "tp_atr": 3.0
+    },
+    {
+      "side": "short",
+      "sl_atr": 1.5,
+      "tp_atr": 3.0
+    }
+  ],
+  "risk": {
+    "size": "atr",
+    "atr_mult": 1.5,
+    "fixed_lots": 0.01,
+    "max_concurrent": 1,
+    "hedge": false,
+    "cool_down_bars": 3
+  }
+}

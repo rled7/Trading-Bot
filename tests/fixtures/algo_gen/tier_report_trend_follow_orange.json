@@ -1,0 +1,57 @@
+{
+  "manifest_name": "trend-follow-orange",
+  "passed": true,
+  "tier": "orange",
+  "min_score": 72.0,
+  "walk_forward": 79.0,
+  "mc_bootstrap": 74.0,
+  "robustness": 72.0,
+  "size_mult": 0.25,
+  "experimental": true,
+  "paper_only": true,
+  "stages": [
+    {
+      "stage": 1,
+      "name": "schema_lint",
+      "passed": true,
+      "reason": "OK",
+      "metrics": {}
+    },
+    {
+      "stage": 2,
+      "name": "sandbox_backtest",
+      "passed": true,
+      "reason": "OK",
+      "metrics": {
+        "trades": 60
+      }
+    },
+    {
+      "stage": 3,
+      "name": "walk_forward",
+      "passed": true,
+      "reason": "5/5 windows passed",
+      "metrics": {
+        "score": 79.0
+      }
+    },
+    {
+      "stage": 4,
+      "name": "mc_bootstrap",
+      "passed": true,
+      "reason": "MC score=74.0%",
+      "metrics": {
+        "score": 74.0
+      }
+    },
+    {
+      "stage": 5,
+      "name": "parameter_robustness",
+      "passed": true,
+      "reason": "Robustness score=72.0%",
+      "metrics": {
+        "score": 72.0
+      }
+    }
+  ]
+}

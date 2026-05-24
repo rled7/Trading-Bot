@@ -1,0 +1,57 @@
+{
+  "manifest_name": "trend-follow-ema-rsi",
+  "passed": true,
+  "tier": "green",
+  "min_score": 90.2,
+  "walk_forward": 91.0,
+  "mc_bootstrap": 90.5,
+  "robustness": 90.2,
+  "size_mult": 1.0,
+  "experimental": false,
+  "paper_only": false,
+  "stages": [
+    {
+      "stage": 1,
+      "name": "schema_lint",
+      "passed": true,
+      "reason": "OK",
+      "metrics": {}
+    },
+    {
+      "stage": 2,
+      "name": "sandbox_backtest",
+      "passed": true,
+      "reason": "OK",
+      "metrics": {
+        "trades": 80
+      }
+    },
+    {
+      "stage": 3,
+      "name": "walk_forward",
+      "passed": true,
+      "reason": "5/5 windows passed",
+      "metrics": {
+        "score": 91.0
+      }
+    },
+    {
+      "stage": 4,
+      "name": "mc_bootstrap",
+      "passed": true,
+      "reason": "MC score=90.5%",
+      "metrics": {
+        "score": 90.5
+      }
+    },
+    {
+      "stage": 5,
+      "name": "parameter_robustness",
+      "passed": true,
+      "reason": "Robustness score=90.2%",
+      "metrics": {
+        "score": 90.2
+      }
+    }
+  ]
+}

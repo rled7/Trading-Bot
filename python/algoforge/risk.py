@@ -300,10 +300,12 @@ class SignalProcessor:
         broker:       IBroker,
         max_risk:     float = 0.01,
         cooldown_sec: int   = 300,
+        algo:         "Optional[object]" = None,   # IAlgorithm — optional, for size_mult
     ) -> None:
         self._broker       = broker
         self._max_risk     = max_risk
         self._cooldown_sec = cooldown_sec
+        self._algo         = algo
 
         self._last_signal: Dict[str, float] = {}
         self._processed:   int = 0
@@ -339,7 +341,13 @@ class SignalProcessor:
         # --- sizing ---
         atr = decision.atr if decision.atr > 0.0 else tick.ask * 0.001
         stop_dist  = atr * 1.5
-        risk_amt   = account.balance * self._max_risk
+        # Honour algo.metadata['size_mult'] when present (S1 §7, R10 extension)
+        size_mult: float = 1.0
+        if self._algo is not None:
+            meta = getattr(self._algo, "metadata", None)
+            if isinstance(meta, dict):
+                size_mult = float(meta.get("size_mult", 1.0))
+        risk_amt   = account.balance * self._max_risk * size_mult
         contract   = sym.contract_size if sym.contract_size > 0.0 else 100_000.0
         raw_lots   = risk_amt / (stop_dist * contract) if stop_dist * contract > 1e-10 else sym.volume_min
         lots       = PositionSizer.normalize_lots(

@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "name": "low-trade-count-test",
+  "description": "Very restrictive conditions that produce almost no trades.",
+  "rationale": "Testing stage 2 rejection due to insufficient trade count.",
+  "timeframes": [
+    "H1"
+  ],
+  "symbols": [
+    "EURUSD"
+  ],
+  "indicators": [
+    {
+      "id": "rsi14",
+      "kind": "rsi",
+      "params": {
+        "period": 14
+      }
+    },
+    {
+      "id": "atr14",
+      "kind": "atr",
+      "params": {
+        "period": 14
+      }
+    }
+  ],
+  "entries": [
+    {
+      "side": "long",
+      "when": "rsi14 > 49 and rsi14 < 51 and close > 2.0"
+    }
+  ],
+  "exits": [
+    {
+      "side": "long",
+      "sl_atr": 1.5,
+      "tp_atr": 3.0
+    }
+  ],
+  "risk": {
+    "size": "atr",
+    "atr_mult": 1.5,
+    "fixed_lots": 0.01,
+    "max_concurrent": 1,
+    "hedge": false,
+    "cool_down_bars": 0
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "manifest_name": "mean-revert-rsi-bb",
+  "passed": true,
+  "tier": "yellow",
+  "min_score": 80.5,
+  "walk_forward": 85.0,
+  "mc_bootstrap": 83.0,
+  "robustness": 80.5,
+  "size_mult": 0.5,
+  "experimental": true,
+  "paper_only": false,
+  "stages": [
+    {
+      "stage": 1,
+      "name": "schema_lint",
+      "passed": true,
+      "reason": "OK",
+      "metrics": {}
+    },
+    {
+      "stage": 2,
+      "name": "sandbox_backtest",
+      "passed": true,
+      "reason": "OK",
+      "metrics": {
+        "trades": 70
+      }
+    },
+    {
+      "stage": 3,
+      "name": "walk_forward",
+      "passed": true,
+      "reason": "5/5 windows passed",
+      "metrics": {
+        "score": 85.0
+      }
+    },
+    {
+      "stage": 4,
+      "name": "mc_bootstrap",
+      "passed": true,
+      "reason": "MC score=83.0%",
+      "metrics": {
+        "score": 83.0
+      }
+    },
+    {
+      "stage": 5,
+      "name": "parameter_robustness",
+      "passed": true,
+      "reason": "Robustness score=80.5%",
+      "metrics": {
+        "score": 80.5
+      }
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "manifest_name": "wf-fail-test",
+  "passed": false,
+  "tier": null,
+  "stages": [
+    {
+      "stage": 1,
+      "name": "schema_lint",
+      "passed": true,
+      "reason": "OK",
+      "metrics": {}
+    },
+    {
+      "stage": 2,
+      "name": "sandbox_backtest",
+      "passed": true,
+      "reason": "OK",
+      "metrics": {
+        "trades": 30
+      }
+    },
+    {
+      "stage": 3,
+      "name": "walk_forward",
+      "passed": false,
+      "reason": "2/5 windows passed (stage failed)",
+      "metrics": {
+        "score": 40.0
+      }
+    }
+  ]
+}

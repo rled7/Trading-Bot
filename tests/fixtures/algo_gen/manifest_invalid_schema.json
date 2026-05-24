@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "name": "invalid-schema-test",
+  "description": "This manifest has an invalid indicator kind.",
+  "rationale": "Testing schema rejection.",
+  "timeframes": [
+    "H1"
+  ],
+  "symbols": [
+    "EURUSD"
+  ],
+  "indicators": [
+    {
+      "id": "x1",
+      "kind": "nonexistent_indicator",
+      "params": {
+        "period": 14
+      }
+    }
+  ],
+  "entries": [
+    {
+      "side": "long",
+      "when": "x1 > 50"
+    }
+  ],
+  "exits": [
+    {
+      "side": "long",
+      "sl_atr": 1.5,
+      "tp_atr": 3.0
+    }
+  ],
+  "risk": {
+    "size": "atr",
+    "atr_mult": 1.5,
+    "fixed_lots": 0.01,
+    "max_concurrent": 1,
+    "hedge": false,
+    "cool_down_bars": 0
+  }
+}

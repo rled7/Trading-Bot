@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "name": "escape-hatch-green",
+  "description": "Escape-hatch EMA crossover strategy.",
+  "rationale": "Tests the escape-hatch code path with a working strategy.",
+  "timeframes": [
+    "H1"
+  ],
+  "symbols": [
+    "EURUSD"
+  ],
+  "indicators": [],
+  "entries": [],
+  "exits": [],
+  "risk": {
+    "size": "atr",
+    "atr_mult": 1.5,
+    "fixed_lots": 0.01,
+    "max_concurrent": 1,
+    "hedge": false,
+    "cool_down_bars": 0
+  },
+  "code": "\nfrom algoforge.algorithm import IAlgorithm, AlgoDecision, AlgoSignal\nfrom algoforge.types import Direction\nfrom algoforge import indicators as _ind\n\nclass GeneratedAlgo(IAlgorithm):\n    def name(self):      return \"escape-hatch-green\"\n    def description(self): return \"Escape hatch EMA crossover\"\n    def magic(self):     return 99001\n\n    def evaluate(self, symbol, tf, bars, count, ind, pat):\n        closes = [b.close for b in bars[:count+1]]\n        if len(closes) < 22:\n            return AlgoDecision.none(symbol)\n        ema9  = _ind.ema(closes, 9)[-1]\n        ema21 = _ind.ema(closes, 21)[-1]\n        atr_v = ind.atr_value or 0.0\n        if ema9 is None or ema21 is None:\n            return AlgoDecision.none(symbol)\n        if ema9 > ema21:\n            return AlgoDecision(\n                signal=AlgoSignal.BUY, symbol=symbol,\n                direction=Direction.LONG, confidence=0.72,\n                reason=\"EMA9 > EMA21\", atr=atr_v\n            )\n        if ema9 < ema21:\n            return AlgoDecision(\n                signal=AlgoSignal.SELL, symbol=symbol,\n                direction=Direction.SHORT, confidence=0.72,\n                reason=\"EMA9 < EMA21\", atr=atr_v\n            )\n        return AlgoDecision.none(symbol)\n"
+}

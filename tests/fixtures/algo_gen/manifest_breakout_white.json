@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "name": "breakout-sma-momentum",
+  "description": "SMA momentum breakout \u2014 designed for white tier.",
+  "rationale": "Fast SMA cross with wide ATR bracket for strong trend capture.",
+  "timeframes": [
+    "H1"
+  ],
+  "symbols": [
+    "EURUSD"
+  ],
+  "indicators": [
+    {
+      "id": "sma5",
+      "kind": "sma",
+      "params": {
+        "period": 5
+      }
+    },
+    {
+      "id": "sma20",
+      "kind": "sma",
+      "params": {
+        "period": 20
+      }
+    },
+    {
+      "id": "atr14",
+      "kind": "atr",
+      "params": {
+        "period": 14
+      }
+    }
+  ],
+  "entries": [
+    {
+      "side": "long",
+      "when": "sma5 > sma20 and close > sma20"
+    },
+    {
+      "side": "short",
+      "when": "sma5 < sma20 and close < sma20"
+    }
+  ],
+  "exits": [
+    {
+      "side": "long",
+      "sl_atr": 1.0,
+      "tp_atr": 4.0
+    },
+    {
+      "side": "short",
+      "sl_atr": 1.0,
+      "tp_atr": 4.0
+    }
+  ],
+  "risk": {
+    "size": "atr",
+    "atr_mult": 1.0,
+    "fixed_lots": 0.01,
+    "max_concurrent": 1,
+    "hedge": false,
+    "cool_down_bars": 2
+  }
+}

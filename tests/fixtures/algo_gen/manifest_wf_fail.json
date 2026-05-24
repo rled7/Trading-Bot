@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "name": "wf-fail-test",
+  "description": "Strategy that overfits to specific bar ranges.",
+  "rationale": "Testing walk-forward failure.",
+  "timeframes": [
+    "H1"
+  ],
+  "symbols": [
+    "EURUSD"
+  ],
+  "indicators": [
+    {
+      "id": "rsi5",
+      "kind": "rsi",
+      "params": {
+        "period": 5
+      }
+    },
+    {
+      "id": "atr14",
+      "kind": "atr",
+      "params": {
+        "period": 14
+      }
+    }
+  ],
+  "entries": [
+    {
+      "side": "long",
+      "when": "rsi5 < 25"
+    },
+    {
+      "side": "short",
+      "when": "rsi5 > 75"
+    }
+  ],
+  "exits": [
+    {
+      "side": "long",
+      "sl_atr": 0.3,
+      "tp_atr": 0.4
+    },
+    {
+      "side": "short",
+      "sl_atr": 0.3,
+      "tp_atr": 0.4
+    }
+  ],
+  "risk": {
+    "size": "atr",
+    "atr_mult": 0.3,
+    "fixed_lots": 0.01,
+    "max_concurrent": 1,
+    "hedge": false,
+    "cool_down_bars": 0
+  }
+}
