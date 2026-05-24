@@ -139,16 +139,16 @@ class TestCLIRetire:
             assert rc == 0  # idempotent
 
 
-# ── generate command (stub) ────────────────────────────────────────────────────
+# ── generate command ───────────────────────────────────────────────────────────
+# Generator implementation tested separately in test_generator.py.
+# The CLI requires --brief; verify that contract here.
 
 class TestCLIGenerate:
-    def test_generate_raises_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            main(["generate", "--brief", "make me a trend follower"])
-
-    def test_generate_stub_message(self):
-        with pytest.raises(NotImplementedError, match="Agent 2"):
-            main(["generate"])
+    def test_generate_requires_brief(self, capsys):
+        rc = main(["generate"])
+        assert rc == 1
+        captured = capsys.readouterr()
+        assert "brief" in captured.err.lower()
 
 
 # ── Unknown command ────────────────────────────────────────────────────────────

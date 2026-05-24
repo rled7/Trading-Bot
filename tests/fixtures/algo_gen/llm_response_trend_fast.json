@@ -1,0 +1,31 @@
+[
+  {
+    "request": {
+      "method": "POST",
+      "path": "/api/chat",
+      "body": {
+        "model": "llama3.1:8b",
+        "stream": false,
+        "messages": [
+          {"role": "system", "content": "fast-mode-system"},
+          {"role": "user", "content": "Brief: long EURUSD trend"}
+        ]
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "llama3.1:8b",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 120,
+        "eval_count": 280,
+        "total_duration": 3456789012,
+        "message": {
+          "role": "assistant",
+          "content": "Here is the strategy manifest:\n```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"eurusd-long-trend-ema\",\n  \"description\": \"Long-side EURUSD H1 trend following using EMA crossover with RSI momentum filter.\",\n  \"rationale\": \"EMA 9/21 crossover identifies medium-term trend direction; RSI above 50 confirms bullish momentum. ATR-based exits manage risk dynamically.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"ema9\",  \"kind\": \"ema\", \"params\": {\"period\": 9}},\n    {\"id\": \"ema21\", \"kind\": \"ema\", \"params\": {\"period\": 21}},\n    {\"id\": \"rsi14\", \"kind\": \"rsi\", \"params\": {\"period\": 14}},\n    {\"id\": \"atr14\", \"kind\": \"atr\", \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\", \"when\": \"ema9 > ema21 and rsi14 > 50\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\", \"sl_atr\": 1.5, \"tp_atr\": 3.0}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 3\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  }
+]

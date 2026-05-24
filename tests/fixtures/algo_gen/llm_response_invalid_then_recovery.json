@@ -1,0 +1,54 @@
+[
+  {
+    "_comment": "Turn 1: well-formed JSON but fails schema validation (unknown indicator kind)",
+    "request": {
+      "method": "POST",
+      "path": "/api/chat",
+      "body": {
+        "model": "llama3.1:8b",
+        "stream": false
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "llama3.1:8b",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 100,
+        "eval_count": 200,
+        "total_duration": 2500000000,
+        "message": {
+          "role": "assistant",
+          "content": "```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"bad-indicator-algo\",\n  \"description\": \"Uses an unknown indicator kind.\",\n  \"rationale\": \"This will fail schema validation.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"myind\", \"kind\": \"unknown_indicator_xyz\", \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\", \"when\": \"close > 0\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\", \"sl_atr\": 1.5, \"tp_atr\": 3.0}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 0\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  },
+  {
+    "_comment": "Turn 2: retry — corrected manifest with valid indicator",
+    "request": {
+      "method": "POST",
+      "path": "/api/chat",
+      "body": {
+        "model": "llama3.1:8b",
+        "stream": false
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "llama3.1:8b",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 220,
+        "eval_count": 310,
+        "total_duration": 3200000000,
+        "message": {
+          "role": "assistant",
+          "content": "Corrected manifest with valid indicator kinds:\n```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"eurusd-corrected-algo\",\n  \"description\": \"Simple mean-reversion strategy using RSI oversold/overbought signals.\",\n  \"rationale\": \"RSI below 30 signals oversold conditions for long entry. ATR-based exits provide dynamic risk management.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"rsi14\", \"kind\": \"rsi\", \"params\": {\"period\": 14}},\n    {\"id\": \"atr14\", \"kind\": \"atr\", \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\", \"when\": \"rsi14 < 30\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\", \"when\": \"rsi14 > 65\"},\n    {\"side\": \"long\", \"sl_atr\": 2.0, \"tp_atr\": 4.0}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 2\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  }
+]

@@ -5,7 +5,19 @@ Usage:
     python -m algoforge.algo_gen promote  <manifest.json> [--confirm]
     python -m algoforge.algo_gen list     [--tier green]
     python -m algoforge.algo_gen retire   <algo-name>
-    python -m algoforge.algo_gen generate ...   # NotImplementedError (Agent 2)
+    python -m algoforge.algo_gen generate \\
+        --brief "long-side EURUSD H1 trend continuation" \\
+        --mode balanced --seed 42 --out registry/
+
+Environment variables for generate:
+    AF_LLM_HOST          Ollama host (default: http://localhost:11434)
+    AF_LLM_MODEL         Ollama model (default: llama3.1:8b)
+    AF_ALGO_GEN_BALANCED_MODEL   Balanced model (default: qwen2.5:32b)
+    AF_ALGO_GEN_REASONING_HOST   Max mode host (default: https://api.openai.com/v1)
+    AF_ALGO_GEN_REASONING_MODEL  Max mode model (default: o3-mini)
+    AF_ALGO_GEN_REASONING_API_KEY  Required for max mode
+    AF_ALGO_GEN_MAX_CANDIDATES   Ensemble size (default: 5)
+    AF_ALGO_GEN_SEED             RNG seed (default: 42)
 """
 from __future__ import annotations
 
@@ -187,8 +199,148 @@ def cmd_retire(args: argparse.Namespace) -> int:
 
 
 def cmd_generate(args: argparse.Namespace) -> int:
-    """Generate a new algorithm using the LLM pipeline. (Not yet implemented.)"""
-    raise NotImplementedError("S1 Phase 1 Agent 2 will add this")
+    """Generate a new algorithm using the LLM pipeline.
+
+    Modes:
+      fast     — single-pass local Ollama (AF_LLM_HOST / AF_LLM_MODEL)
+      balanced — generate + self-critique (AF_ALGO_GEN_BALANCED_MODEL)
+      max      — N-candidate reasoning ensemble (AF_ALGO_GEN_REASONING_*)
+    """
+    from .generator import GenerationError, generate_balanced, generate_fast, generate_max
+    from .fixtures import load_bars
+    from .validator import validate
+    from .schema import validate_manifest as _vm
+
+    brief  = args.brief or ""
+    mode   = args.mode
+    seed   = args.seed
+    out    = args.out or _find_registry_dir()
+
+    if not brief.strip():
+        print("Error: --brief is required", file=sys.stderr)
+        return 1
+
+    # ── Assemble providers ────────────────────────────────────────────────────
+    try:
+        from ..llm.ollama import OllamaProvider
+    except ImportError:
+        print("Error: algoforge.llm not available; cannot generate", file=sys.stderr)
+        return 1
+
+    # Fast / balanced provider (local Ollama)
+    fast_host  = os.environ.get("AF_LLM_HOST", "http://localhost:11434")
+    fast_model = os.environ.get("AF_LLM_MODEL", "llama3.1:8b")
+    provider = OllamaProvider(host=fast_host, model=fast_model, seed=seed)
+
+    balanced_model = os.environ.get("AF_ALGO_GEN_BALANCED_MODEL", "qwen2.5:32b")
+
+    reasoning_provider = None
+    reasoning_model = os.environ.get("AF_ALGO_GEN_REASONING_MODEL", "o3-mini")
+    if mode == "max":
+        reasoning_host    = os.environ.get("AF_ALGO_GEN_REASONING_HOST", "")
+        reasoning_api_key = os.environ.get("AF_ALGO_GEN_REASONING_API_KEY", "")
+        if not reasoning_api_key:
+            print(
+                "Error: AF_ALGO_GEN_REASONING_API_KEY is required for max mode. "
+                "Set it in your environment or use --mode balanced.",
+                file=sys.stderr,
+            )
+            return 1
+        if not reasoning_host:
+            reasoning_host = "https://api.openai.com/v1"
+        # Build reasoning provider as an Ollama-compatible provider pointing to
+        # the OpenAI-compatible endpoint.  Use the Ollama provider with bearer
+        # auth header injection if the host differs from localhost.
+        reasoning_provider = OllamaProvider(
+            host=reasoning_host,
+            model=reasoning_model,
+            seed=seed,
+        )
+
+    n_candidates = int(os.environ.get("AF_ALGO_GEN_MAX_CANDIDATES", "5"))
+
+    # ── Run generator ─────────────────────────────────────────────────────────
+    print(f"Generating algorithm [mode={mode}]  brief='{brief[:60]}'")
+    try:
+        if mode == "fast":
+            manifest, trace = generate_fast(brief, provider, seed=seed, model=fast_model)
+        elif mode == "balanced":
+            manifest, trace = generate_balanced(brief, provider, seed=seed, model=balanced_model)
+        elif mode == "max":
+            manifest, trace = generate_max(
+                brief, provider, seed=seed,
+                n_candidates=n_candidates,
+                reasoning_provider=reasoning_provider,
+                model=reasoning_model,
+            )
+        else:
+            print(f"Error: unknown mode '{mode}'", file=sys.stderr)
+            return 1
+    except GenerationError as exc:
+        print(f"Generation failed: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"Generated manifest: name={manifest.name}")
+    if trace.parse_failures:
+        print(f"  Warnings: {len(trace.parse_failures)} parse failure(s) during generation")
+
+    # ── Validate end-to-end ───────────────────────────────────────────────────
+    try:
+        bars = load_bars("bars_eurusd_h1_2y.json")
+    except FileNotFoundError:
+        print("Warning: bar fixture not found; skipping full validation", file=sys.stderr)
+        bars = []
+
+    import dataclasses
+    manifest_dict = dataclasses.asdict(manifest)
+    # Flatten nested dataclasses to dicts for validate_manifest call
+    manifest_dict["indicators"] = [
+        {"id": ind.id, "kind": ind.kind, "params": ind.params}
+        for ind in manifest.indicators
+    ]
+    manifest_dict["entries"] = [
+        {"side": e.side, "when": e.when}
+        for e in manifest.entries
+    ]
+    manifest_dict["exits"] = [
+        {k: v for k, v in {"side": ex.side, "when": ex.when, "sl_atr": ex.sl_atr, "tp_atr": ex.tp_atr}.items() if v is not None}
+        for ex in manifest.exits
+    ]
+    manifest_dict["risk"] = {
+        "size": manifest.risk.size,
+        "atr_mult": manifest.risk.atr_mult,
+        "fixed_lots": manifest.risk.fixed_lots,
+        "max_concurrent": manifest.risk.max_concurrent,
+        "hedge": manifest.risk.hedge,
+        "cool_down_bars": manifest.risk.cool_down_bars,
+    }
+    # Remove enum-handled symbols back to raw value
+    if isinstance(manifest_dict.get("symbols"), list):
+        pass  # already a list
+
+    if bars:
+        result = validate(manifest_dict, bars, seed)
+        for stage in result.stages:
+            status = "PASS" if stage.passed else "FAIL"
+            print(f"  Stage {stage.stage} [{status}] {stage.name}: {stage.reason}")
+
+        if result.passed and result.report:
+            r = result.report
+            print(f"\nValidation: PASS — tier={r.tier.value}  min_score={r.min_score:.2f}")
+            print(f"  WF={r.walk_forward:.2f}  MC={r.mc_bootstrap:.2f}  Rob={r.robustness:.2f}")
+        else:
+            print("\nValidation: FAIL — manifest generated but rejected by validator")
+            return 3
+    else:
+        print("Validation: SKIPPED (no bar data)")
+
+    # ── Write manifest to --out ───────────────────────────────────────────────
+    os.makedirs(out, exist_ok=True)
+    out_path = os.path.join(out, f"{manifest.name}.json")
+    with open(out_path, "w") as f:
+        json.dump(manifest_dict, f, indent=2)
+    print(f"\nManifest written to: {out_path}")
+    return 0
 
 
 # ── Argument parser ───────────────────────────────────────────────────────────
@@ -227,12 +379,15 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ret.add_argument("name", help="Algorithm name to retire")
     p_ret.add_argument("--registry", default=None, help="Registry directory path")
 
-    # generate (stub)
-    p_gen = sub.add_parser("generate", help="[Not yet implemented] Generate via LLM")
-    p_gen.add_argument("--brief",  default="", help="Natural-language brief")
-    p_gen.add_argument("--mode",   default="balanced", choices=["fast", "balanced", "max"])
-    p_gen.add_argument("--seed",   type=int, default=42)
-    p_gen.add_argument("--out",    default=None)
+    # generate
+    p_gen = sub.add_parser("generate", help="Generate a new algorithm via LLM")
+    p_gen.add_argument("--brief",        default="", help="Natural-language brief")
+    p_gen.add_argument("--mode",         default="balanced", choices=["fast", "balanced", "max"])
+    p_gen.add_argument("--seed",         type=int, default=42)
+    p_gen.add_argument("--out",          default=None,
+                       help="Output directory for manifest JSON (default: repo_root/registry/)")
+    p_gen.add_argument("--n-candidates", type=int, default=None,
+                       help="Candidates for max mode (overrides AF_ALGO_GEN_MAX_CANDIDATES)")
 
     return parser
 

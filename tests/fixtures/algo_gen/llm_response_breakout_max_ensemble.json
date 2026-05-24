@@ -1,0 +1,173 @@
+[
+  {
+    "_comment": "Turn 1: Candidate 1 - Keltner channel breakout",
+    "request": {"method": "POST", "path": "/api/chat", "body": {}},
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "o3-mini",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 200,
+        "eval_count": 350,
+        "total_duration": 6000000000,
+        "message": {
+          "role": "assistant",
+          "content": "Candidate 1 - Keltner breakout:\n```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"keltner-breakout-rsi\",\n  \"description\": \"Keltner channel breakout with RSI momentum filter for EURUSD.\",\n  \"rationale\": \"Price breaking above Keltner upper band signals volatility expansion. RSI above 55 confirms momentum. ATR exits manage risk.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"kelt20\", \"kind\": \"keltner\", \"params\": {\"period\": 20}},\n    {\"id\": \"rsi14\",  \"kind\": \"rsi\",     \"params\": {\"period\": 14}},\n    {\"id\": \"atr14\",  \"kind\": \"atr\",     \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\", \"when\": \"close > kelt20 and rsi14 > 55\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\", \"sl_atr\": 1.5, \"tp_atr\": 3.0}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 3\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  },
+  {
+    "_comment": "Turn 2: Candidate 2 - ADX trend filter",
+    "request": {"method": "POST", "path": "/api/chat", "body": {}},
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "o3-mini",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 200,
+        "eval_count": 360,
+        "total_duration": 6100000000,
+        "message": {
+          "role": "assistant",
+          "content": "Candidate 2 - ADX trend filter:\n```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"ema-adx-trend-filter\",\n  \"description\": \"EMA crossover with ADX trend strength filter for breakout entries.\",\n  \"rationale\": \"ADX above 25 ensures only trending conditions are traded. EMA 10/30 crossover confirms direction. Wide stops allow trend to develop.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"ema10\", \"kind\": \"ema\", \"params\": {\"period\": 10}},\n    {\"id\": \"ema30\", \"kind\": \"ema\", \"params\": {\"period\": 30}},\n    {\"id\": \"adx14\", \"kind\": \"adx\", \"params\": {\"period\": 14}},\n    {\"id\": \"atr14\", \"kind\": \"atr\", \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\",  \"when\": \"ema10 > ema30 and adx14 > 25\"},\n    {\"side\": \"short\", \"when\": \"ema10 < ema30 and adx14 > 25\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\",  \"sl_atr\": 2.0, \"tp_atr\": 4.0},\n    {\"side\": \"short\", \"sl_atr\": 2.0, \"tp_atr\": 4.0}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 5\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  },
+  {
+    "_comment": "Turn 3: Candidate 3 - Bollinger squeeze",
+    "request": {"method": "POST", "path": "/api/chat", "body": {}},
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "o3-mini",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 200,
+        "eval_count": 340,
+        "total_duration": 5900000000,
+        "message": {
+          "role": "assistant",
+          "content": "Candidate 3 - Bollinger squeeze breakout:\n```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"bollinger-rsi-breakout\",\n  \"description\": \"Bollinger band breakout with RSI confirmation for EURUSD.\",\n  \"rationale\": \"Price closing above upper Bollinger band with RSI between 55-80 signals momentum breakout without overbought exhaustion.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"bb20\",  \"kind\": \"bollinger\", \"params\": {\"period\": 20}},\n    {\"id\": \"rsi14\", \"kind\": \"rsi\",       \"params\": {\"period\": 14}},\n    {\"id\": \"atr14\", \"kind\": \"atr\",       \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\", \"when\": \"close > bb20 and rsi14 > 55\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\", \"when\": \"rsi14 > 75\"},\n    {\"side\": \"long\", \"sl_atr\": 1.5, \"tp_atr\": 3.5}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 3\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  },
+  {
+    "_comment": "Turn 4: Candidate 4 - Stochastic mean reversion",
+    "request": {"method": "POST", "path": "/api/chat", "body": {}},
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "o3-mini",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 200,
+        "eval_count": 330,
+        "total_duration": 5700000000,
+        "message": {
+          "role": "assistant",
+          "content": "Candidate 4 - Stochastic crossover:\n```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"stochastic-ema-crossover\",\n  \"description\": \"Stochastic oscillator crossover with EMA trend bias filter.\",\n  \"rationale\": \"Stochastic below 25 crossover long when price is above EMA 50 for trend-aligned mean-reversion entries.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"stoch14\", \"kind\": \"stochastic\", \"params\": {\"period\": 14}},\n    {\"id\": \"ema50\",   \"kind\": \"ema\",        \"params\": {\"period\": 50}},\n    {\"id\": \"atr14\",   \"kind\": \"atr\",        \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\", \"when\": \"stoch14 < 25 and close > ema50\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\", \"when\": \"stoch14 > 75\"},\n    {\"side\": \"long\", \"sl_atr\": 1.5, \"tp_atr\": 3.0}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 2\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  },
+  {
+    "_comment": "Turn 5: Candidate 5 - HMA momentum",
+    "request": {"method": "POST", "path": "/api/chat", "body": {}},
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "o3-mini",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 200,
+        "eval_count": 320,
+        "total_duration": 5500000000,
+        "message": {
+          "role": "assistant",
+          "content": "Candidate 5 - HMA momentum:\n```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"hma-rsi-momentum\",\n  \"description\": \"Hull Moving Average momentum strategy with RSI filter for EURUSD.\",\n  \"rationale\": \"HMA reduces lag vs EMA; crossover with SMA 50 confirms medium-term trend. RSI filters weak momentum.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"hma20\", \"kind\": \"hma\", \"params\": {\"period\": 20}},\n    {\"id\": \"sma50\", \"kind\": \"sma\", \"params\": {\"period\": 50}},\n    {\"id\": \"rsi14\", \"kind\": \"rsi\", \"params\": {\"period\": 14}},\n    {\"id\": \"atr14\", \"kind\": \"atr\", \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\",  \"when\": \"hma20 > sma50 and rsi14 > 50\"},\n    {\"side\": \"short\", \"when\": \"hma20 < sma50 and rsi14 < 50\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\",  \"sl_atr\": 1.5, \"tp_atr\": 3.5},\n    {\"side\": \"short\", \"sl_atr\": 1.5, \"tp_atr\": 3.5}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 4\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  },
+  {
+    "_comment": "Turn 6: Critique of top-2 candidate 1 (keltner-breakout-rsi) - refined version",
+    "request": {"method": "POST", "path": "/api/chat", "body": {}},
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "o3-mini",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 300,
+        "eval_count": 400,
+        "total_duration": 7000000000,
+        "message": {
+          "role": "assistant",
+          "content": "Weaknesses: 1) RSI threshold 55 is arbitrary; 2) No volume confirmation; 3) Cooldown too short. Revised:\n```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"keltner-adx-breakout\",\n  \"description\": \"Keltner channel breakout with ADX trend-strength and RSI filter for robust EURUSD entries.\",\n  \"rationale\": \"Keltner breakout above upper band confirms expansion; ADX above 20 ensures trending context; RSI above 50 avoids false breakouts in ranging markets. Extended cooldown prevents chasing.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"kelt20\", \"kind\": \"keltner\",  \"params\": {\"period\": 20}},\n    {\"id\": \"rsi14\",  \"kind\": \"rsi\",      \"params\": {\"period\": 14}},\n    {\"id\": \"adx14\",  \"kind\": \"adx\",      \"params\": {\"period\": 14}},\n    {\"id\": \"atr14\",  \"kind\": \"atr\",      \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\",  \"when\": \"close > kelt20 and rsi14 > 50 and adx14 > 20\"},\n    {\"side\": \"short\", \"when\": \"close < kelt20 and rsi14 < 50 and adx14 > 20\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\",  \"sl_atr\": 1.5, \"tp_atr\": 3.5},\n    {\"side\": \"short\", \"sl_atr\": 1.5, \"tp_atr\": 3.5}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 5\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  },
+  {
+    "_comment": "Turn 7: Critique of top-2 candidate 2 (ema-adx-trend-filter) - refined version",
+    "request": {"method": "POST", "path": "/api/chat", "body": {}},
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "o3-mini",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 300,
+        "eval_count": 410,
+        "total_duration": 7100000000,
+        "message": {
+          "role": "assistant",
+          "content": "Weaknesses: 1) Wide 2-ATR stops may cause too many losers on short-duration trends; 2) No momentum oscillator; 3) Hedged positions add complexity. Revised:\n```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"ema-adx-rsi-refined\",\n  \"description\": \"Refined EMA crossover with ADX and RSI triple-filter for high-probability breakout entries.\",\n  \"rationale\": \"EMA 10/30 crossover direction, ADX above 25 for trend strength, and RSI momentum filter together select only the strongest breakout conditions. Tighter entries with 1.5 ATR stops improve win rate.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"ema10\", \"kind\": \"ema\", \"params\": {\"period\": 10}},\n    {\"id\": \"ema30\", \"kind\": \"ema\", \"params\": {\"period\": 30}},\n    {\"id\": \"adx14\", \"kind\": \"adx\", \"params\": {\"period\": 14}},\n    {\"id\": \"rsi14\", \"kind\": \"rsi\", \"params\": {\"period\": 14}},\n    {\"id\": \"atr14\", \"kind\": \"atr\", \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\",  \"when\": \"ema10 > ema30 and adx14 > 25 and rsi14 > 50\"},\n    {\"side\": \"short\", \"when\": \"ema10 < ema30 and adx14 > 25 and rsi14 < 50\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\",  \"sl_atr\": 1.5, \"tp_atr\": 3.0},\n    {\"side\": \"short\", \"sl_atr\": 1.5, \"tp_atr\": 3.0}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 5\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  },
+  {
+    "_comment": "Turn 8 (extra): Two-consecutive-failure first turn",
+    "request": {"method": "POST", "path": "/api/chat", "body": {}},
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "o3-mini",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 10,
+        "eval_count": 10,
+        "total_duration": 100000000,
+        "message": {
+          "role": "assistant",
+          "content": "Extra placeholder turn for double-failure tests. {invalid json here"
+        }
+      }
+    }
+  },
+  {
+    "_comment": "Turn 9 (extra): Two-consecutive-failure second turn (still fails)",
+    "request": {"method": "POST", "path": "/api/chat", "body": {}},
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "o3-mini",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 10,
+        "eval_count": 10,
+        "total_duration": 100000000,
+        "message": {
+          "role": "assistant",
+          "content": "Still invalid json: {broken: true, no quotes"
+        }
+      }
+    }
+  }
+]

@@ -36,6 +36,13 @@ Public API (LLM-free portion):
 
   Fixtures:
     load_bars, load_manifest, load_expected_tier_report
+    load_llm_response, MultiTurnMockTransport
+
+  Generator (LLM-driven):
+    generate_fast(brief, provider, seed) -> (AlgoManifest, GenerationTrace)
+    generate_balanced(brief, provider, seed) -> (AlgoManifest, GenerationTrace)
+    generate_max(brief, provider, seed, n_candidates) -> (AlgoManifest, GenerationTrace)
+    GenerationTrace, GenerationError
 """
 from .types import (
     AlgoManifest,
@@ -62,7 +69,22 @@ from .validator import validate
 from .tier import score_to_tier
 from .promote import promote, PromotionError
 from .robustness import parameter_robustness
-from .fixtures import load_bars, load_manifest, load_expected_tier_report
+from .fixtures import (
+    load_bars,
+    load_manifest,
+    load_expected_tier_report,
+    load_llm_response,
+    MultiTurnMockTransport,
+)
+from .generator import (
+    generate_fast,
+    generate_balanced,
+    generate_max,
+    GenerationTrace,
+    GenerationError,
+    CandidateSummary,
+    CritiquePair,
+)
 
 __all__ = [
     # types
@@ -88,4 +110,8 @@ __all__ = [
     "parameter_robustness",
     # fixtures
     "load_bars", "load_manifest", "load_expected_tier_report",
+    "load_llm_response", "MultiTurnMockTransport",
+    # generator
+    "generate_fast", "generate_balanced", "generate_max",
+    "GenerationTrace", "GenerationError", "CandidateSummary", "CritiquePair",
 ]

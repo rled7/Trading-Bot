@@ -1,0 +1,54 @@
+[
+  {
+    "_comment": "Turn 1: malformed JSON response",
+    "request": {
+      "method": "POST",
+      "path": "/api/chat",
+      "body": {
+        "model": "llama3.1:8b",
+        "stream": false
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "llama3.1:8b",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 100,
+        "eval_count": 150,
+        "total_duration": 2000000000,
+        "message": {
+          "role": "assistant",
+          "content": "Here is the manifest: {\"schema_version\": \"1.0\", \"name\": \"broken-json-algo\", MISSING_QUOTE: true}"
+        }
+      }
+    }
+  },
+  {
+    "_comment": "Turn 2: retry with fix prompt — returns valid JSON",
+    "request": {
+      "method": "POST",
+      "path": "/api/chat",
+      "body": {
+        "model": "llama3.1:8b",
+        "stream": false
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "llama3.1:8b",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 200,
+        "eval_count": 300,
+        "total_duration": 3000000000,
+        "message": {
+          "role": "assistant",
+          "content": "Fixed manifest:\n```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"eurusd-recovery-algo\",\n  \"description\": \"A simple trend-following strategy recovered after JSON fix.\",\n  \"rationale\": \"Uses EMA crossover for trend direction with ATR-based exits.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"ema10\", \"kind\": \"ema\", \"params\": {\"period\": 10}},\n    {\"id\": \"ema30\", \"kind\": \"ema\", \"params\": {\"period\": 30}},\n    {\"id\": \"atr14\", \"kind\": \"atr\", \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\", \"when\": \"ema10 > ema30\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\", \"sl_atr\": 2.0, \"tp_atr\": 4.0}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 0\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  }
+]

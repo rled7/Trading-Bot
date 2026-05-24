@@ -1,0 +1,64 @@
+[
+  {
+    "_comment": "Turn 1: initial generation",
+    "request": {
+      "method": "POST",
+      "path": "/api/chat",
+      "body": {
+        "model": "qwen2.5:32b",
+        "stream": false,
+        "messages": [
+          {"role": "system", "content": "balanced-mode-system"},
+          {"role": "user", "content": "Brief: long EURUSD trend"}
+        ]
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "qwen2.5:32b",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 180,
+        "eval_count": 320,
+        "total_duration": 5123456789,
+        "message": {
+          "role": "assistant",
+          "content": "Initial candidate:\n```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"eurusd-trend-ema-rsi\",\n  \"description\": \"EMA crossover with RSI filter for EURUSD long-side trend following.\",\n  \"rationale\": \"EMA 9/21 crossover detects momentum shifts; RSI above 50 filters out weak signals. ATR bracket exits manage trade risk.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"ema9\",  \"kind\": \"ema\", \"params\": {\"period\": 9}},\n    {\"id\": \"ema21\", \"kind\": \"ema\", \"params\": {\"period\": 21}},\n    {\"id\": \"rsi14\", \"kind\": \"rsi\", \"params\": {\"period\": 14}},\n    {\"id\": \"atr14\", \"kind\": \"atr\", \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\", \"when\": \"ema9 > ema21 and rsi14 > 50\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\", \"sl_atr\": 1.5, \"tp_atr\": 3.0}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 2\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  },
+  {
+    "_comment": "Turn 2: critique and revision",
+    "request": {
+      "method": "POST",
+      "path": "/api/chat",
+      "body": {
+        "model": "qwen2.5:32b",
+        "stream": false,
+        "messages": [
+          {"role": "system", "content": "balanced-mode-system"},
+          {"role": "user", "content": "critique prompt"},
+          {"role": "assistant", "content": "initial manifest"},
+          {"role": "user", "content": "please critique and revise"}
+        ]
+      }
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "model": "qwen2.5:32b",
+        "done": true,
+        "done_reason": "stop",
+        "prompt_eval_count": 350,
+        "eval_count": 420,
+        "total_duration": 7234567890,
+        "message": {
+          "role": "assistant",
+          "content": "Weaknesses identified: 1) RSI threshold of 50 may generate false signals in ranging markets. 2) Only 2-bar cooldown is insufficient to avoid over-trading. 3) Single timeframe lacks multi-period confirmation. Revised manifest:\n```json\n{\n  \"schema_version\": \"1.0\",\n  \"name\": \"eurusd-trend-ema-adx\",\n  \"description\": \"EMA crossover with ADX trend-strength filter for higher-quality EURUSD long entries.\",\n  \"rationale\": \"EMA 9/21 crossover with ADX above 25 ensures only strong-trending market conditions are traded. RSI above 55 adds momentum confirmation. Increased cooldown reduces overtrading.\",\n  \"timeframes\": [\"H1\"],\n  \"symbols\": [\"EURUSD\"],\n  \"indicators\": [\n    {\"id\": \"ema9\",  \"kind\": \"ema\", \"params\": {\"period\": 9}},\n    {\"id\": \"ema21\", \"kind\": \"ema\", \"params\": {\"period\": 21}},\n    {\"id\": \"rsi14\", \"kind\": \"rsi\", \"params\": {\"period\": 14}},\n    {\"id\": \"adx14\", \"kind\": \"adx\", \"params\": {\"period\": 14}},\n    {\"id\": \"atr14\", \"kind\": \"atr\", \"params\": {\"period\": 14}}\n  ],\n  \"entries\": [\n    {\"side\": \"long\", \"when\": \"ema9 > ema21 and rsi14 > 55 and adx14 > 25\"}\n  ],\n  \"exits\": [\n    {\"side\": \"long\", \"sl_atr\": 1.5, \"tp_atr\": 3.5}\n  ],\n  \"risk\": {\n    \"size\": \"atr\",\n    \"atr_mult\": 1.5,\n    \"fixed_lots\": 0.01,\n    \"max_concurrent\": 1,\n    \"hedge\": false,\n    \"cool_down_bars\": 5\n  },\n  \"code\": null\n}\n```"
+        }
+      }
+    }
+  }
+]
