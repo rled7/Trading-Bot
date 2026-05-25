@@ -14,6 +14,7 @@ export class AlgoDecision {
         confidence = 0,
         reason     = '',
         atr        = 0,
+        sizeMult   = null,
     } = {}) {
         this.signal     = signal;
         this.symbol     = symbol;
@@ -21,6 +22,8 @@ export class AlgoDecision {
         this.confidence = confidence;
         this.reason     = reason;
         this.atr        = atr;
+        /** Optional size multiplier set by ManifestAlgo from metadata.sizeMult. */
+        this.sizeMult   = sizeMult;
     }
 
     /** Returns true when the decision has an actionable signal with sufficient confidence. */
@@ -37,6 +40,12 @@ export class AlgoDecision {
 export class IAlgorithm {
     constructor() {
         this._enabled = true;
+        /**
+         * Optional metadata dict (populated by algo_gen promotion).
+         * Backward-compatible: existing algorithms leave this null.
+         * @type {object|null}
+         */
+        this.metadata = null;
     }
 
     /** Unique human-readable name (must override). */
