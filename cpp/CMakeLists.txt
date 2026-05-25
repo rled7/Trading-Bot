@@ -142,4 +142,39 @@ set_target_properties(test_llm PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED 
 add_test(NAME LLMTests COMMAND test_llm
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# ── AlgoGen sources (S1 Phase 1) ──
+set(ALGO_GEN_SOURCES
+  src/algo_gen/dsl.cpp
+  src/algo_gen/json_helpers.cpp
+  src/algo_gen/promote.cpp
+  src/algo_gen/robustness.cpp
+  src/algo_gen/runtime.cpp
+  src/algo_gen/schema.cpp
+  src/algo_gen/serialise.cpp
+  src/algo_gen/tier.cpp
+  src/algo_gen/validator.cpp
+)
+
+add_library(af_algo_gen STATIC ${ALGO_GEN_SOURCES})
+target_include_directories(af_algo_gen PUBLIC include PRIVATE src/algo_gen)
+target_link_libraries(af_algo_gen PUBLIC af_lib)
+# indicators.c is already compiled into af_engine; for standalone use we add it directly
+target_sources(af_algo_gen PRIVATE src/indicators/indicators.c)
+set_target_properties(af_algo_gen PROPERTIES
+  C_STANDARD 17
+  CXX_STANDARD 20
+  CXX_STANDARD_REQUIRED ON)
+
+# ── AlgoGen test suite (S1 Phase 1, standalone) ──
+add_executable(test_algo_gen
+  tests/test_algo_gen_main.cpp
+  tests/test_algo_gen.cpp)
+target_include_directories(test_algo_gen PRIVATE include tests src/algo_gen)
+target_link_libraries(test_algo_gen PRIVATE af_algo_gen)
+target_compile_definitions(test_algo_gen PRIVATE
+  FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures")
+set_target_properties(test_algo_gen PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME AlgoGenTests COMMAND test_algo_gen
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")
