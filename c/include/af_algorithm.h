@@ -73,6 +73,13 @@ struct af_algorithm_s {
 
     int   enabled; /**< Non-zero = algorithm participates in evaluation. */
     void *impl;    /**< Private implementation state (algorithm-defined). */
+
+    /**
+     * Opaque metadata pointer — populated by af_algo_promote() after a
+     * manifest algorithm is promoted.  NULL for all other algorithms.
+     * Caller owns the lifetime; cast to af_algo_metadata_t * when needed.
+     */
+    void *metadata;
 };
 
 /**
