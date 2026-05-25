@@ -1,0 +1,361 @@
+/* ============================================================
+   AlgoForge — Algo Lab page styles
+   Inherits CSS variables from the parent dashboard (style.css).
+   This file is self-contained for the standalone algo_lab.html page.
+   ============================================================ */
+
+/* ---- Tier palette ---- */
+.tier-reject {
+  background: #ffebee;
+  border-color: #c62828;
+  color: #c62828;
+}
+
+.tier-orange {
+  background: #fff3e0;
+  border-color: #ef6c00;
+  color: #ef6c00;
+}
+
+.tier-yellow {
+  background: #fffde7;
+  border-color: #f9a825;
+  color: #f9a825;
+}
+
+.tier-green {
+  background: #e8f5e9;
+  border-color: #2e7d32;
+  color: #2e7d32;
+}
+
+.tier-white {
+  background: #fafafa;
+  border-color: #424242;
+  color: #424242;
+}
+
+/* ---- Page layout ---- */
+.algo-lab-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: var(--gap);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ---- Panel sections ---- */
+.al-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+
+.al-panel-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--text-head);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 12px;
+}
+
+/* ---- Generate form ---- */
+#al-brief {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 8px 10px;
+  resize: vertical;
+  min-height: 72px;
+  outline: none;
+  margin-bottom: 10px;
+}
+
+#al-brief:focus {
+  border-color: var(--accent);
+}
+
+.al-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.al-controls-row label {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+#al-effort {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+}
+
+#al-effort:focus {
+  border-color: var(--accent);
+}
+
+#al-seed {
+  width: 90px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+}
+
+#al-seed:focus {
+  border-color: var(--accent);
+}
+
+#al-generate-btn {
+  background: #1a2e4a;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 5px 18px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+#al-generate-btn:hover:not(:disabled) {
+  background: #21314a;
+}
+
+#al-generate-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---- Disabled notice ---- */
+#al-disabled-notice {
+  display: none;
+  padding: 8px 12px;
+  background: #2d2208;
+  color: var(--yellow);
+  border: 1px solid var(--yellow);
+  border-radius: var(--radius);
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+#al-disabled-notice.visible {
+  display: block;
+}
+
+/* ---- Streaming log ---- */
+#al-log-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 48px;
+}
+
+.al-log-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.al-log-item.done {
+  color: var(--text);
+}
+
+.al-log-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.al-log-text {
+  word-break: break-word;
+}
+
+/* Tier badge inside log */
+.al-tier-badge {
+  display: inline-block;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* ---- Registry table ---- */
+.al-table-wrap {
+  overflow-x: auto;
+}
+
+#al-registry-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+#al-registry-table thead th {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+  padding: 5px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+#al-registry-table thead th.num {
+  text-align: right;
+}
+
+#al-registry-table tbody tr {
+  border-bottom: 1px solid #1e2530;
+}
+
+#al-registry-table tbody tr:nth-child(even) {
+  background: var(--bg-row-alt);
+}
+
+#al-registry-table tbody td {
+  padding: 6px 8px;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+#al-registry-table tbody tr:hover td {
+  background: #1f2a3a;
+}
+
+#al-registry-table tbody td.num {
+  text-align: right;
+}
+
+.al-empty-row {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 14px;
+}
+
+/* Tier cell chip */
+.al-tier-chip {
+  display: inline-block;
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+/* Status badges */
+.al-status {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.al-status-active   { color: var(--green); }
+.al-status-ready    { color: var(--yellow); }
+.al-status-rejected { color: var(--red); }
+.al-status-retired  { color: var(--text-muted); }
+
+/* Action buttons inside table */
+.al-action-btn {
+  background: #21262d;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 10px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  margin-right: 3px;
+  white-space: nowrap;
+}
+
+.al-action-btn:hover {
+  background: #30363d;
+  color: var(--text-head);
+  border-color: var(--accent);
+}
+
+.al-action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ---- Nav link in header (used in index.html) ---- */
+.al-nav-link {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 4px 12px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.al-nav-link:hover {
+  background: #1a2233;
+}
+
+/* ---- Spinner (inline rotating indicator) ---- */
+@keyframes al-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.al-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: al-spin 0.75s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 700px) {
+  .al-controls-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

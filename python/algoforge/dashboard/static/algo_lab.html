@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Algo Lab — AlgoForge</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/css/algo_lab.css" />
+</head>
+<body>
+  <!-- ===== HEADER ===== -->
+  <header class="site-header">
+    <div class="header-left" style="display:flex;align-items:center;gap:14px;">
+      <h1 class="site-title">AlgoForge Dashboard</h1>
+      <nav style="display:flex;gap:8px;">
+        <a href="/" class="al-nav-link">&#x2190; Dashboard</a>
+      </nav>
+    </div>
+    <div class="header-right">
+      <div class="token-row">
+        <label for="token-input" class="sr-only">API Token</label>
+        <input
+          id="token-input"
+          type="text"
+          class="token-input"
+          placeholder="Paste Bearer token..."
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button id="token-save" class="btn-save">Save</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== MAIN ===== -->
+  <main class="algo-lab-grid">
+
+    <!-- ===== GENERATE PANEL ===== -->
+    <section class="al-panel" id="al-generate-panel">
+      <h2 class="al-panel-title">Generate Algo</h2>
+
+      <label for="al-brief" class="sr-only">Strategy brief</label>
+      <textarea
+        id="al-brief"
+        placeholder="Brief: e.g. Long EURUSD breakouts with momentum filter..."
+        rows="3"
+        aria-label="Strategy brief"
+      ></textarea>
+
+      <div class="al-controls-row">
+        <label for="al-effort">Effort</label>
+        <select id="al-effort" aria-label="Effort level">
+          <option value="fast">fast</option>
+          <option value="balanced" selected>balanced</option>
+          <option value="max">max</option>
+        </select>
+
+        <label for="al-seed">Seed</label>
+        <input
+          id="al-seed"
+          type="number"
+          placeholder="(random)"
+          aria-label="Random seed"
+        />
+
+        <button id="al-generate-btn" type="button">Generate</button>
+      </div>
+
+      <div id="al-disabled-notice" role="alert">
+        Generator not configured &mdash; wire <code>algo_gen=</code> in <code>make_app</code>
+      </div>
+    </section>
+
+    <!-- ===== STREAMING LOG PANEL ===== -->
+    <section class="al-panel" id="al-log-panel" aria-live="polite">
+      <h2 class="al-panel-title">Streaming log</h2>
+      <ul id="al-log-list" aria-label="Generation log">
+        <!-- log items injected by algo_lab.js -->
+      </ul>
+    </section>
+
+    <!-- ===== REGISTRY TABLE PANEL ===== -->
+    <section class="al-panel" id="al-registry-panel">
+      <h2 class="al-panel-title">Algo Registry</h2>
+      <div class="al-table-wrap">
+        <table id="al-registry-table" aria-label="Algo registry">
+          <thead>
+            <tr>
+              <th>Tier</th>
+              <th>Name</th>
+              <th class="num">Score</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="al-registry-body">
+            <tr><td colspan="5" class="al-empty-row">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Page script (plain ES module, no bundler) -->
+  <script type="module">
+    // Minimal token management — mirrors dashboard pattern.
+    // Token stored in sessionStorage["AF_DASHBOARD_TOKEN"] or localStorage["dashboard_token"].
+    const tokenInput = document.getElementById("token-input");
+    const tokenSave  = document.getElementById("token-save");
+
+    function loadToken() {
+      const t = sessionStorage.getItem("AF_DASHBOARD_TOKEN")
+             || localStorage.getItem("dashboard_token")
+             || "";
+      tokenInput.value = t;
+    }
+
+    function saveToken() {
+      const t = tokenInput.value.trim();
+      sessionStorage.setItem("AF_DASHBOARD_TOKEN", t);
+      localStorage.setItem("dashboard_token", t);
+    }
+
+    tokenSave.addEventListener("click", saveToken);
+    tokenInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") saveToken();
+    });
+
+    loadToken();
+  </script>
+  <script type="module" src="/static/js/algo_lab.js"></script>
+</body>
+</html>
