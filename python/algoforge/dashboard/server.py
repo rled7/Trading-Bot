@@ -37,6 +37,9 @@ from algoforge.types import Timeframe
 
 from .log_buffer import LogRingBuffer
 
+# Disabled response for algo_gen
+_ALGO_GEN_DISABLED_RESP = {"error": "algo_gen_disabled", "detail": "algo_gen not configured"}
+
 # Symbol list taken from PaperBroker._PAIRS (same order)
 _PAPER_SYMBOLS: list[str] = [
     "EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "EURJPY",
@@ -133,6 +136,7 @@ def make_app(
     token: str | None = None,
     log_buffer: LogRingBuffer | None = None,
     llm: LLMProvider | None = None,
+    algo_gen: Any = None,
 ) -> FastAPI:
     """Create and return the dashboard FastAPI application.
 
@@ -150,6 +154,10 @@ def make_app(
     llm:
         Optional :class:`LLMProvider` instance.  When ``None``, all
         ``/api/llm/*`` endpoints return 503 with ``{"error":"llm_disabled"}``.
+    algo_gen:
+        Optional algo_gen facade instance.  When ``None``, all
+        ``/api/algos/*`` endpoints return 503 with
+        ``{"error":"algo_gen_disabled"}``.
     """
     log = get_logger("dashboard")
     _start_time = time.monotonic()
@@ -410,5 +418,24 @@ def make_app(
                 "X-Accel-Buffering": "no",
             },
         )
+
+    # ---- /api/algos/* -------------------------------------------------------
+    if algo_gen is not None:
+        from .algo_gen_routes import make_algo_gen_router
+        algo_router = make_algo_gen_router(algo_gen)
+        app.include_router(algo_router, dependencies=_auth_dep)
+    else:
+        # Return 503 for all /api/algos/* when algo_gen is disabled
+        @app.api_route(
+            "/api/algos/{path:path}",
+            methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+            include_in_schema=False,
+        )
+        def _algos_disabled(path: str) -> None:  # type: ignore[return]
+            raise HTTPException(status_code=503, detail=_ALGO_GEN_DISABLED_RESP)
+
+        @app.get("/api/algos", include_in_schema=False)
+        def _algos_list_disabled() -> None:  # type: ignore[return]
+            raise HTTPException(status_code=503, detail=_ALGO_GEN_DISABLED_RESP)
 
     return app
