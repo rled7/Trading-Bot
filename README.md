@@ -88,7 +88,9 @@ the C++ reference to the three remaining languages (C, Python, JS).
 | S2 | Local LLM via Ollama (trade rationale, backtest commentary, news sentiment, strategy describe) + dashboard chat panel | ✅⁴ | ✅⁴ | ✅⁴ | ✅⁴ | **Complete** |
 | S3 | Web dashboard (FastAPI + static UI, Python-hosted) | — | — | ✅² | — | **Complete** |
 | S4 | Advanced analytics (14 metrics, drawdown episodes, distributions, correlations, Monte Carlo, walk-forward, OLS attribution, factor regression, online streaming, HTML report) | ✅³ | ✅³ | ✅³ | ✅³ | **Complete** |
-| S1, S5 | AI algo gen, multi-broker | — | — | — | — | Stretch |
+| S1 | AI algorithm generator (manifest schema, 5-stage validator, tier system, sandboxed DSL, LLM-driven generation, Algo Lab dashboard panel) | ✅⁵ | ✅⁵ | ✅⁵ | ✅⁵ | **Complete** |
+| S5 | Multi-broker support | — | — | — | — | Stretch |
+| S6 | Background C++ algo discovery daemon (always-on observation, hypothesis former, S1-compatible manifests) | — | — | — | — | Planned |
 
 ¹ Python has the `MetaTrader5` package wired — live test requires Windows + MT5 terminal.
 See **[docs/mt5_setup.md](docs/mt5_setup.md)** for prerequisites, environment variables (`MT5_PATH`, `MT5_SERVER`, `MT5_LOGIN`, `MT5_PASSWORD`), a usage snippet, and troubleshooting tips.
@@ -113,6 +115,17 @@ across all four implementations. Shared spec and fixtures live in
 (`AF_LLM_HOST`, `AF_LLM_MODEL`). Use cases: `trade_rationale`, `backtest_commentary`,
 `news_sentiment`, `strategy_describe`. The Python dashboard exposes a collapsible chat
 panel via `/api/llm/*` (health, models, chat, chat/stream SSE).
+
+⁵ Full cross-language algorithm generator layer. Manifest schema, whitelisted DSL,
+5-stage validation pipeline (schema → sandbox-backtest → walk-forward → MC bootstrap →
+parameter robustness), and tier system (🔴 Red <70, 🟠 Orange 70–79, 🟡 Yellow 80–89,
+🟢 Green 90–94, ⚪ White 95–100) shared by all four implementations against canonical
+fixtures at `tests/fixtures/algo_gen/*.json`. Spec at **[docs/algo_gen_spec.md](docs/algo_gen_spec.md)**;
+setup at **[docs/algo_gen_setup.md](docs/algo_gen_setup.md)**. The LLM-driven generator
+(fast / balanced / max effort modes) is Python-only by design (C/C++/JS return a
+deterministic `escape_hatch_skip_<lang>` stage for the optional Python `code` field).
+Python dashboard exposes the Algo Lab panel via `/api/algos/*` (`generate`,
+`generate/stream` SSE, `backtest`, `promote`, `retire`, `list`, `{id}/manifest`).
 
 Legend: ✅ complete · ⚠️ partial · ❌ not started · — not planned for this round
 
