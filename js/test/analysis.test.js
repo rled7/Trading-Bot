@@ -126,19 +126,22 @@ test("MarketStructure: returns RANGING for too-few bars", () => {
 
 test("MarketStructure: detects STRONG_BULL with HH+HL", () => {
     const ms = new MarketStructure(2);
-    // Build bars with clear HH and HL swing structure
-    // Alternating: up, peak, down, higher-low, up again, higher-high
+    // Clean HH+HL structure. With swingStrength=2 a pivot needs 2 bars clear on
+    // each side, so swing highs/lows must sit at indices [2, n-3]. Highs peak at
+    // i=2 (1.020) then i=6 (1.030 = HH); lows trough at i=4 (1.000) then i=8
+    // (1.010 = HL). 11 bars so i=8 is inside the detection window.
     const bars = [
-        bar(1.000, 1.010, 0.998, 1.005), // rising
-        bar(1.005, 1.020, 1.004, 1.018), // swing high at 1.020
-        bar(1.018, 1.019, 1.010, 1.012), // pull back
-        bar(1.012, 1.013, 1.005, 1.007), // swing low at 1.005
-        bar(1.007, 1.012, 1.006, 1.010), // rising
-        bar(1.010, 1.030, 1.009, 1.028), // swing high at 1.030 (HH)
-        bar(1.028, 1.029, 1.015, 1.017), // pull back
-        bar(1.017, 1.018, 1.012, 1.014), // swing low at 1.012 (HL)
-        bar(1.014, 1.025, 1.013, 1.022), // rising again
-        bar(1.022, 1.035, 1.021, 1.033), // continues up
+        bar(1.000, 1.005, 0.995, 1.002),
+        bar(1.002, 1.010, 1.000, 1.008),
+        bar(1.009, 1.020, 1.008, 1.018), // swing high 1.020 (prev SH)
+        bar(1.013, 1.014, 1.004, 1.006),
+        bar(1.011, 1.012, 1.000, 1.002), // swing low 1.000 (prev SL)
+        bar(1.007, 1.018, 1.006, 1.016),
+        bar(1.015, 1.030, 1.014, 1.028), // swing high 1.030 (HH)
+        bar(1.023, 1.024, 1.012, 1.014),
+        bar(1.021, 1.022, 1.010, 1.012), // swing low 1.010 (HL)
+        bar(1.017, 1.028, 1.016, 1.026),
+        bar(1.021, 1.034, 1.020, 1.032), // continues up
     ];
     const result = ms.analyse(bars);
     // With clean HH+HL we expect STRONG_BULL or at minimum BULL
@@ -152,17 +155,20 @@ test("MarketStructure: detects STRONG_BULL with HH+HL", () => {
 
 test("MarketStructure: detects STRONG_BEAR with LH+LL", () => {
     const ms = new MarketStructure(2);
+    // Clean LH+LL structure (mirror of the bull case). Highs peak at i=2 (1.030)
+    // then i=6 (1.020 = LH); lows trough at i=4 (1.000) then i=8 (0.998 = LL).
     const bars = [
-        bar(1.030, 1.032, 1.020, 1.025),
-        bar(1.025, 1.026, 1.010, 1.012),
-        bar(1.012, 1.020, 1.011, 1.018), // lower high swing at 1.020
-        bar(1.018, 1.019, 1.005, 1.007),
-        bar(1.007, 1.008, 0.998, 1.000), // lower low swing at 0.998
-        bar(1.000, 1.010, 0.999, 1.008),
-        bar(1.008, 1.015, 1.007, 1.010), // lower high at 1.015
-        bar(1.010, 1.011, 0.995, 0.997), // lower low at 0.995
-        bar(0.997, 1.002, 0.996, 1.000),
-        bar(1.000, 1.001, 0.990, 0.993),
+        bar(1.024, 1.025, 1.018, 1.020),
+        bar(1.019, 1.020, 1.010, 1.012),
+        bar(1.016, 1.030, 1.014, 1.028), // swing high 1.030 (prev SH)
+        bar(1.016, 1.018, 1.008, 1.009),
+        bar(1.014, 1.016, 1.000, 1.002), // swing low 1.000 (prev SL)
+        bar(1.008, 1.014, 1.006, 1.012),
+        bar(1.014, 1.020, 1.012, 1.018), // swing high 1.020 (LH)
+        bar(1.010, 1.012, 1.005, 1.006),
+        bar(1.012, 1.014, 0.998, 1.000), // swing low 0.998 (LL)
+        bar(1.006, 1.008, 1.004, 1.005),
+        bar(1.003, 1.004, 1.000, 1.001), // continues down
     ];
     const result = ms.analyse(bars);
     assert.ok(
