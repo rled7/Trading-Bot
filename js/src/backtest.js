@@ -377,7 +377,9 @@ export class BacktestEngine {
                             : fillPx - stopDist * cfg.rrRatio;
 
                         // Position sizing: risk fixed % of capital over stop distance
-                        let lots = (capital * cfg.riskPct) / (stopDist * 100000);
+                        const _sizeMult = (algo && algo.metadata && algo.metadata.sizeMult != null)
+                            ? algo.metadata.sizeMult : 1.0;
+                        let lots = (capital * cfg.riskPct) / (stopDist * 100000) * _sizeMult;
                         lots = Math.round(lots * 100) / 100;           // round to 2 dp
                         lots = Math.max(0.01, Math.min(10.0, lots));   // clamp [0.01, 10]
 

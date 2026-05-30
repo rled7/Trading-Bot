@@ -305,7 +305,9 @@ export class SignalProcessor {
         const stopDist = atr * 1.5;
 
         // Lot calculation (simplified — mirrors C++ SignalProcessor)
-        const riskAmt  = acct.balance * this._maxRisk;
+        const sizeMult = (decision.sizeMult != null && decision.sizeMult > 0)
+            ? decision.sizeMult : 1.0;
+        const riskAmt  = acct.balance * this._maxRisk * sizeMult;
         const step     = sym.volumeStep > 0 ? sym.volumeStep : 0.01;
         const minLots  = sym.volumeMin  > 0 ? sym.volumeMin  : 0.01;
         const maxLots  = sym.volumeMax  > 0 ? sym.volumeMax  : 100;

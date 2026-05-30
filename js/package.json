@@ -7,7 +7,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "test":  "node --test test/*.test.js",
+    "test":  "node --test test/*.test.js test/algo_gen/*.test.js",
     "bench": "node src/bench.js"
   },
   "dependencies": {}
