@@ -100,8 +100,13 @@ class TestSymbolMapping(unittest.TestCase):
 
 
 class TestUnimplementedSurface(unittest.TestCase):
-    def test_trading_methods_raise_notimplemented(self):
-        broker = make_broker("oanda", paper=True)
+    """The RestBroker base must leave the trading surface unimplemented so a
+    freshly-scaffolded adapter is instantiable while its methods are filled in.
+    (Concrete adapters override these; we assert the base default here so the
+    test stays valid as adapters land.)"""
+
+    def test_base_trading_methods_raise_notimplemented(self):
+        broker = RestBroker()
         for call in (
             lambda: broker.get_account(),
             lambda: broker.get_tick("EURUSD"),
