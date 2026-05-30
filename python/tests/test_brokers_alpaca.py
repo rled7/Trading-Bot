@@ -273,6 +273,32 @@ class TestPlaceOrder(unittest.TestCase):
 
         self.assertEqual(calls[0][2]["qty"], "7.5")
 
+    def test_place_order_drops_sl_tp_honestly(self):
+        """sl/tp are not transmittable on plain Alpaca orders.
+
+        Contract: they must NOT appear in the POST body, and the returned
+        Order must report sl/tp=0 (not echo the requested values) so callers
+        cannot mistake un-sent stops for active ones.
+        """
+        broker = _connected_broker()
+        calls: list[tuple] = []
+
+        def _capture(method, path, *, params=None, body=None, headers=None):
+            calls.append((method, path, body))
+            return self._ORDER_RESP
+
+        with patch.object(broker, "_request", side_effect=_capture):
+            order = broker.place_order("AAPL", OrderType.BUY, 10.0,
+                                       sl=140.0, tp=160.0)
+
+        # Returned Order is honest: no phantom stops
+        self.assertEqual(order.sl, 0.0)
+        self.assertEqual(order.tp, 0.0)
+        # Body never carried sl/tp as stop_price/limit_price
+        body = calls[0][2]
+        self.assertNotIn("stop_price", body)
+        self.assertNotIn("limit_price", body)
+
 
 class TestGetTick(unittest.TestCase):
 
@@ -419,6 +445,54 @@ class TestClosePosition(unittest.TestCase):
         self.assertEqual(rc, 0)
         _, _, params = calls[0]
         self.assertEqual(params, {"qty": "2.0"})
+
+
+class TestModifyPosition(unittest.TestCase):
+    """modify_position limitation contract (S5).
+
+    Alpaca exposes no SL/TP on filled positions. A position-keyed ticket
+    (symbol, no hyphen) cannot be modified -> returns 1 and does NOT call
+    the API. An order-keyed ticket (UUID, has hyphen) attempts a PATCH
+    replace of the open order.
+    """
+
+    def test_modify_position_on_position_ticket_returns_one(self):
+        broker = _connected_broker()
+        broker._alloc_ticket("AAPL")   # position key (symbol, no hyphen)
+        ticket = broker._id_to_ticket["AAPL"]
+
+        # Must not touch the network for a position-keyed ticket.
+        with patch.object(broker, "_request",
+                          side_effect=AssertionError("must not call API")):
+            rc = broker.modify_position(ticket, sl=140.0, tp=160.0)
+
+        self.assertEqual(rc, 1)
+
+    def test_modify_position_on_order_uuid_attempts_replace(self):
+        broker = _connected_broker()
+        broker._alloc_ticket("ord-abc-123")   # order key (UUID, has hyphen)
+        ticket = broker._id_to_ticket["ord-abc-123"]
+
+        calls: list[tuple] = []
+
+        def _capture(method, path, *, params=None, body=None, headers=None):
+            calls.append((method, path, body))
+            return {}
+
+        with patch.object(broker, "_request", side_effect=_capture):
+            rc = broker.modify_position(ticket, sl=140.0, tp=160.0)
+
+        self.assertEqual(rc, 0)
+        method, path, body = calls[0]
+        self.assertEqual(method, "PATCH")
+        self.assertIn("ord-abc-123", path)
+        self.assertEqual(body["stop_price"], "140.0")
+        self.assertEqual(body["limit_price"], "160.0")
+
+    def test_modify_position_unknown_ticket_returns_one(self):
+        broker = _connected_broker()
+        rc = broker.modify_position(99999, sl=1.0, tp=2.0)
+        self.assertEqual(rc, 1)
 
 
 class TestErrorPath(unittest.TestCase):

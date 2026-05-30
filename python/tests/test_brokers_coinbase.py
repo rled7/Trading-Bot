@@ -535,6 +535,36 @@ class TestCancelOrder(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# 16. modify_position (cancel-then-replace limitation)
+# ---------------------------------------------------------------------------
+
+class TestModifyPosition(unittest.TestCase):
+    """Coinbase market IOC orders cannot be modified in place.
+
+    Contract: modify_position is implemented as cancel-then-replace. It
+    delegates to cancel_order; success returns 0, an unknown ticket returns
+    the cancel step's non-zero code.
+    """
+
+    def test_modify_position_delegates_to_cancel(self):
+        broker = _connected_broker()
+        ticket = broker._register_order_id("ord-to-modify")
+        payload = {
+            "results": [{"order_id": "ord-to-modify", "success": True}]
+        }
+        with patch("algoforge.brokers.base.urllib.request.urlopen",
+                   return_value=_make_resp(payload)):
+            rc = broker.modify_position(ticket, sl=1.0, tp=2.0)
+
+        self.assertEqual(rc, 0)
+
+    def test_modify_position_unknown_ticket_returns_nonzero(self):
+        broker = _connected_broker()
+        rc = broker.modify_position(9999, sl=1.0, tp=2.0)
+        self.assertNotEqual(rc, 0)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

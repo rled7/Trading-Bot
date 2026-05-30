@@ -295,6 +295,18 @@ class AlpacaBroker(RestBroker):
             coid = f"af-{magic}-{comment}"[:64]
             body["client_order_id"] = coid
 
+        # SL/TP are NOT transmitted: a plain Alpaca order has no SL/TP fields
+        # (bracket-order legs would be required).  Rather than echo stops the
+        # exchange never received, warn and report sl/tp=0 on the Order so the
+        # returned object honestly reflects what was placed.
+        if sl or tp:
+            log.warning(
+                "alpaca: place_order(%s) requested sl=%s tp=%s but Alpaca plain "
+                "orders carry no SL/TP — they were NOT transmitted. Returned "
+                "Order reports sl/tp=0. Use bracket orders for attached stops.",
+                symbol, sl, tp,
+            )
+
         data = self._post("/orders", body=body)
         alpaca_id = data.get("id", "")
         ticket = self._alloc_ticket(alpaca_id)
@@ -305,8 +317,8 @@ class AlpacaBroker(RestBroker):
             type=order_type,
             lots=lots,
             price=price,
-            sl=sl,
-            tp=tp,
+            sl=0.0,   # not transmitted to Alpaca — see warning above
+            tp=0.0,
             fill_price=float(data.get("filled_avg_price") or 0),
             magic=magic,
             comment=comment,

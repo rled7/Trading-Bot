@@ -89,7 +89,7 @@ the C++ reference to the three remaining languages (C, Python, JS).
 | S3 | Web dashboard (FastAPI + static UI, Python-hosted) | — | — | ✅² | — | **Complete** |
 | S4 | Advanced analytics (14 metrics, drawdown episodes, distributions, correlations, Monte Carlo, walk-forward, OLS attribution, factor regression, online streaming, HTML report) | ✅³ | ✅³ | ✅³ | ✅³ | **Complete** |
 | S1 | AI algorithm generator (manifest schema, 5-stage validator, tier system, sandboxed DSL, LLM-driven generation, Algo Lab dashboard panel) | ✅⁵ | ✅⁵ | ✅⁵ | ✅⁵ | **Complete** |
-| S5 | Multi-broker support | — | — | — | — | Stretch |
+| S5 | Multi-broker support (OANDA, Alpaca, IBKR, Binance, Coinbase REST adapters; env-var creds; paper/live same code path) | — | — | ✅⁶ | — | **Complete** |
 | S6 | Background C++ algo discovery daemon (always-on observation, hypothesis former, S1-compatible manifests) | — | — | — | — | Planned |
 
 ¹ Python has the `MetaTrader5` package wired — live test requires Windows + MT5 terminal.
@@ -126,6 +126,15 @@ setup at **[docs/algo_gen_setup.md](docs/algo_gen_setup.md)**. The LLM-driven ge
 deterministic `escape_hatch_skip_<lang>` stage for the optional Python `code` field).
 Python dashboard exposes the Algo Lab panel via `/api/algos/*` (`generate`,
 `generate/stream` SSE, `backtest`, `promote`, `retire`, `list`, `{id}/manifest`).
+
+⁶ Python multi-broker layer: REST adapters for OANDA, Alpaca, IBKR, Binance, and
+Coinbase over a shared `RestBroker` base (stdlib `urllib`, zero new deps), with the
+14-method `IBroker` contract, `make_broker()` registry, and `BrokerConfig.from_env`
+(`AF_<BROKER>_*`). Paper and live share one code path via a mode flag; symbol mapping
+is per-adapter. Live-API limitations are handled honestly: Alpaca plain orders carry
+no SL/TP (use bracket orders) and `modify_position` on a filled position is a no-op;
+Coinbase market-IOC `modify_position` is cancel-then-replace. Dashboard wires
+`--broker`/`--live`. 191 mocked adapter tests in `tests/test_brokers*.py`.
 
 Legend: ✅ complete · ⚠️ partial · ❌ not started · — not planned for this round
 
