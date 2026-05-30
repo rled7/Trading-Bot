@@ -29,11 +29,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=8000, help="Bind port (default: 8000)")
+    from algoforge.brokers import available_brokers
     parser.add_argument(
         "--broker",
-        choices=["paper", "mt5"],
+        choices=available_brokers(),
         default="paper",
         help="Broker backend (default: paper)",
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Use live trading for REST brokers (default: paper/practice endpoint)",
     )
     parser.add_argument(
         "--balance",
@@ -59,17 +65,13 @@ def main(argv: list[str] | None = None) -> None:
     token: str | None = os.environ.get("AF_DASHBOARD_TOKEN") or None
 
     # Broker
-    if args.broker == "mt5":
-        try:
-            from algoforge.mt5_broker import MT5Broker  # type: ignore[import]
-            broker = MT5Broker()
-        except ImportError:
-            log.error("MT5Broker requires the 'live' optional dependency group. "
-                      "Install with: pip install algoforge[live]")
-            sys.exit(1)
-    else:
-        from algoforge.paper_broker import PaperBroker
-        broker = PaperBroker(balance=args.balance)
+    from algoforge.brokers import make_broker
+    try:
+        broker = make_broker(args.broker, paper=not args.live,
+                             balance=args.balance)
+    except (ImportError, ValueError) as exc:
+        log.error(str(exc))
+        sys.exit(1)
 
     rc = broker.connect()
     if rc != 0:
