@@ -1,7 +1,11 @@
 # Build artifacts
 build/
+build_manual/
+cpp/build_manual/
 out/
 cmake-build-*/
+_s5_suite_result.txt
+*_suite_result.txt
 compile_commands.json
 CMakeCache.txt
 CMakeFiles/
