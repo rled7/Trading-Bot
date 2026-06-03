@@ -241,8 +241,10 @@ protected:
                                          const std::string& body,
                                          const std::map<std::string,std::string>& hdrs) const;
 
-private:
+protected:
     std::string _resolve_base_url() const;
+
+private:
     static std::string _urlencode(const std::map<std::string,std::string>& params);
 };
 
@@ -488,7 +490,32 @@ private:
  * =========================================================================*/
 
 /**
- * Returns ["paper","mt5","oanda","alpaca","ibkr","binance","coinbase"].
+ * Factory function type used by the self-registration map.
+ * Each concrete adapter .cpp registers itself with:
+ *
+ *     static bool _reg = register_broker("name",
+ *         [](bool paper, double balance, BrokerConfig cfg) {
+ *             return std::make_unique<MyBroker>(std::move(cfg));
+ *         });
+ *
+ * WARNING (static-library linker stripping): if an adapter TU is compiled
+ * into a static library and nothing else references it, the linker may drop
+ * its .o and the static-initialiser will not run.  Use --whole-archive (GCC/
+ * Clang) or FORCE_LOAD (Apple ld) when linking from a static archive.
+ */
+using factory_fn = std::function<std::unique_ptr<IBroker>(bool paper,
+                                                           double balance,
+                                                           BrokerConfig cfg)>;
+
+/**
+ * Register a broker factory under the given name (lower-case canonical).
+ * Returns true (so it can be used as a static initialiser value).
+ * Thread-safe only if called before any concurrent make_broker() calls.
+ */
+bool register_broker(const std::string& name, factory_fn fn);
+
+/**
+ * Returns ["paper","mt5"] plus all self-registered adapter names, sorted.
  */
 std::vector<std::string> available_brokers();
 
