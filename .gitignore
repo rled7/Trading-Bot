@@ -1,7 +1,9 @@
 # Build artifacts
 build/
 build_manual/
+build_test/
 cpp/build_manual/
+cpp/build_test/
 out/
 cmake-build-*/
 _s5_suite_result.txt
