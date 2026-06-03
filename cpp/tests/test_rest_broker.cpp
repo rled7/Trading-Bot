@@ -70,8 +70,7 @@ public:
 
     const char* broker_name() const override { return BROKER_NAME; }
 
-    /* Expose protected helpers for tests */
-    std::string resolve_base_url() const { return _resolve_base_url(); }
+    /* connect() sets base_url_ which is accessible via the public base_url() accessor. */
 
 protected:
     const char* live_url()  const override { return LIVE_URL;  }
@@ -300,20 +299,22 @@ void test_rest_broker(TestRunner T) {
      * ===================================================================== */
     section("ENDPOINT RESOLUTION");
 
-    T("paper=true resolves to PAPER_URL", []{
+    T("paper=true resolves to PAPER_URL after connect()", []{
+        /* connect() calls _resolve_base_url() and stores in base_url_.
+         * _on_connect() is a no-op for TestAdapter so connect() succeeds. */
         BrokerConfig cfg("test_adapter");
         cfg.paper = true;
         TestAdapter ta(cfg);
-        std::string url = ta.resolve_base_url();
-        CHK(url == "https://paper.example.com/v1");
+        CHK(ta.connect() == AF_OK);
+        CHK(ta.base_url() == "https://paper.example.com/v1");
     });
 
-    T("paper=false resolves to LIVE_URL", []{
+    T("paper=false resolves to LIVE_URL after connect()", []{
         BrokerConfig cfg("test_adapter");
         cfg.paper = false;
         TestAdapter ta(cfg);
-        std::string url = ta.resolve_base_url();
-        CHK(url == "https://live.example.com/v1");
+        CHK(ta.connect() == AF_OK);
+        CHK(ta.base_url() == "https://live.example.com/v1");
     });
 
     T("explicit base_url overrides paper/live", []{
@@ -321,16 +322,17 @@ void test_rest_broker(TestRunner T) {
         BrokerConfig cfg("test_adapter");
         cfg.base_url = "https://example.test/v3/";
         TestAdapter ta(cfg);
+        CHK(ta.connect() == AF_OK);
         /* Trailing slash must be stripped (mirrors Python .rstrip('/')) */
-        std::string url = ta.resolve_base_url();
-        CHK(url == "https://example.test/v3");
+        CHK(ta.base_url() == "https://example.test/v3");
     });
 
     T("trailing slashes in base_url are stripped", []{
         BrokerConfig cfg("test_adapter");
         cfg.base_url = "https://example.test///";
         TestAdapter ta(cfg);
-        CHK(ta.resolve_base_url() == "https://example.test");
+        CHK(ta.connect() == AF_OK);
+        CHK(ta.base_url() == "https://example.test");
     });
 
     /* =====================================================================

@@ -241,10 +241,8 @@ protected:
                                          const std::string& body,
                                          const std::map<std::string,std::string>& hdrs) const;
 
-protected:
-    std::string _resolve_base_url() const;
-
 private:
+    std::string _resolve_base_url() const;
     static std::string _urlencode(const std::map<std::string,std::string>& params);
 };
 
