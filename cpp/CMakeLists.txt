@@ -50,6 +50,8 @@ set(CPP_SOURCES
   src/broker/paper_broker.cpp
   src/broker/mt5_broker.cpp
   src/broker/rest_broker.cpp
+  src/broker/ibkr_broker.cpp
+  src/broker/oanda_broker.cpp
   src/data/bar_store.cpp
   src/data/trade_journal.cpp
   src/data/csv_bars.cpp
@@ -189,5 +191,14 @@ target_include_directories(test_rest_broker PRIVATE include tests src/llm)
 target_link_libraries(test_rest_broker PRIVATE af_engine af_llm)
 set_target_properties(test_rest_broker PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME RestBrokerTests COMMAND test_rest_broker)
+
+# ── IBKR broker test suite (Phase 1 / S5, standalone) ──
+add_executable(test_ibkr_broker
+  tests/test_ibkr_broker_main.cpp
+  tests/test_ibkr_broker.cpp)
+target_include_directories(test_ibkr_broker PRIVATE include tests src/llm)
+target_link_libraries(test_ibkr_broker PRIVATE af_engine af_llm)
+set_target_properties(test_ibkr_broker PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME IbkrBrokerTests COMMAND test_ibkr_broker)
 
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")

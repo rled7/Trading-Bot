@@ -70,13 +70,25 @@ std::string emit_object(const std::map<std::string, std::string>& kv) {
 std::string emit_double(double v) {
     if (std::isinf(v) || std::isnan(v)) return "null";
     char buf[64];
+    /* shortest round-trip representation */
     for (int p = 1; p <= 17; ++p) {
         snprintf(buf, sizeof(buf), "%.*g", p, v);
-        double rt = strtod(buf, nullptr);
-        if (rt == v) return buf;
+        if (strtod(buf, nullptr) == v) break;
     }
-    snprintf(buf, sizeof(buf), "%.17g", v);
-    return buf;
+    std::string s(buf);
+    /* %g can pick scientific notation (e.g. 250 -> "2.5e+02"), which diverges
+     * from Python's json and malforms broker API payloads. For values in a
+     * normal positional range, re-render without an exponent. */
+    if (s.find('e') != std::string::npos || s.find('E') != std::string::npos) {
+        const double av = std::fabs(v);
+        if (av >= 1e-4 && av < 1e16) {
+            for (int dp = 0; dp <= 17; ++dp) {
+                snprintf(buf, sizeof(buf), "%.*f", dp, v);
+                if (strtod(buf, nullptr) == v) { s = buf; break; }
+            }
+        }
+    }
+    return s;
 }
 
 /* Emit a JSON string value (with quotes) */

@@ -346,7 +346,7 @@ private:
 };
 
 /* ── Interactive Brokers REST (Client Portal Web API) ── */
-class IbkrBroker final : public RestBroker {
+class IbkrBroker : public RestBroker {
 public:
     static constexpr const char* BROKER_NAME = "ibkr";
     static constexpr const char* LIVE_URL    = "https://localhost:5000/v1/api";
@@ -377,7 +377,7 @@ protected:
     const char* paper_url() const override { return PAPER_URL; }
     void _on_connect() override;
 
-private:
+protected:   /* protected (not private) so parity-test subclasses can mock/inspect — see test_ibkr_broker.cpp */
     mutable std::unordered_map<std::string, int64_t> conid_cache_;
 
     int64_t    _resolve_conid(const std::string& sym) const;
@@ -511,6 +511,20 @@ using factory_fn = std::function<std::unique_ptr<IBroker>(bool paper,
  * Thread-safe only if called before any concurrent make_broker() calls.
  */
 bool register_broker(const std::string& name, factory_fn fn);
+
+/* ── Per-adapter registration hooks ──
+ * Each <name>_broker.cpp defines its own register_<name>_broker(), which calls
+ * register_broker("<name>", factory). ensure_brokers_registered() invokes all of
+ * them exactly once and is called first by make_broker()/available_brokers().
+ * Explicit calls (NOT static-init) are used so an adapter's translation unit can
+ * never be silently stripped by the static-library linker. Defined at integration
+ * once all five adapters exist. */
+void register_oanda_broker();
+void register_alpaca_broker();
+void register_ibkr_broker();
+void register_binance_broker();
+void register_coinbase_broker();
+void ensure_brokers_registered();
 
 /**
  * Returns ["paper","mt5"] plus all self-registered adapter names, sorted.
