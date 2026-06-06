@@ -201,4 +201,13 @@ target_link_libraries(test_ibkr_broker PRIVATE af_engine af_llm)
 set_target_properties(test_ibkr_broker PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME IbkrBrokerTests COMMAND test_ibkr_broker)
 
+# ── OANDA broker test suite (Phase 1 / S5, standalone) ──
+add_executable(test_oanda_broker
+  tests/test_oanda_broker_main.cpp
+  tests/test_oanda_broker.cpp)
+target_include_directories(test_oanda_broker PRIVATE include tests src/llm)
+target_link_libraries(test_oanda_broker PRIVATE af_engine af_llm)
+set_target_properties(test_oanda_broker PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME OandaBrokerTests COMMAND test_oanda_broker)
+
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")

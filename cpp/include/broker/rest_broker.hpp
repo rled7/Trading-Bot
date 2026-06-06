@@ -251,7 +251,7 @@ private:
  * =========================================================================*/
 
 /* ── OANDA v20 REST ── */
-class OandaBroker final : public RestBroker {
+class OandaBroker : public RestBroker {
 public:
     static constexpr const char* BROKER_NAME = "oanda";
     static constexpr const char* LIVE_URL    = "https://api-fxtrade.oanda.com/v3";
