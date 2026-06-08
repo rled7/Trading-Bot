@@ -297,7 +297,7 @@ private:
 };
 
 /* ── Alpaca REST ── */
-class AlpacaBroker final : public RestBroker {
+class AlpacaBroker : public RestBroker {
 public:
     static constexpr const char* BROKER_NAME = "alpaca";
     static constexpr const char* LIVE_URL    = "https://api.alpaca.markets/v2";
@@ -330,7 +330,8 @@ protected:
     void _on_connect() override;
     std::map<std::string,std::string> _auth_headers() const override;
 
-private:
+    /* protected (not private) so parity-test subclasses can drive ticket
+     * allocation — see test_alpaca_broker.cpp. */
     /* Ticket management — mirrors Python Alpaca's _alloc_ticket / _resolve_key */
     mutable std::unordered_map<std::string, uint64_t> id_to_ticket_;
     mutable std::unordered_map<uint64_t, std::string> ticket_to_id_;

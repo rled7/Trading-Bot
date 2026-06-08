@@ -52,6 +52,7 @@ set(CPP_SOURCES
   src/broker/rest_broker.cpp
   src/broker/ibkr_broker.cpp
   src/broker/oanda_broker.cpp
+  src/broker/alpaca_broker.cpp
   src/data/bar_store.cpp
   src/data/trade_journal.cpp
   src/data/csv_bars.cpp
@@ -209,5 +210,14 @@ target_include_directories(test_oanda_broker PRIVATE include tests src/llm)
 target_link_libraries(test_oanda_broker PRIVATE af_engine af_llm)
 set_target_properties(test_oanda_broker PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME OandaBrokerTests COMMAND test_oanda_broker)
+
+# ── Alpaca broker test suite (Phase 1 / S5, standalone) ──
+add_executable(test_alpaca_broker
+  tests/test_alpaca_broker_main.cpp
+  tests/test_alpaca_broker.cpp)
+target_include_directories(test_alpaca_broker PRIVATE include tests src/llm)
+target_link_libraries(test_alpaca_broker PRIVATE af_engine af_llm)
+set_target_properties(test_alpaca_broker PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME AlpacaBrokerTests COMMAND test_alpaca_broker)
 
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")
