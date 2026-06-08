@@ -389,7 +389,7 @@ protected:   /* protected (not private) so parity-test subclasses can mock/inspe
 };
 
 /* ── Binance Spot REST ── */
-class BinanceBroker final : public RestBroker {
+class BinanceBroker : public RestBroker {
 public:
     static constexpr const char* BROKER_NAME = "binance";
     static constexpr const char* LIVE_URL    = "https://api.binance.com";

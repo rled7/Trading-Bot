@@ -53,6 +53,7 @@ set(CPP_SOURCES
   src/broker/ibkr_broker.cpp
   src/broker/oanda_broker.cpp
   src/broker/alpaca_broker.cpp
+  src/broker/binance_broker.cpp
   src/data/bar_store.cpp
   src/data/trade_journal.cpp
   src/data/csv_bars.cpp
@@ -219,5 +220,14 @@ target_include_directories(test_alpaca_broker PRIVATE include tests src/llm)
 target_link_libraries(test_alpaca_broker PRIVATE af_engine af_llm)
 set_target_properties(test_alpaca_broker PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME AlpacaBrokerTests COMMAND test_alpaca_broker)
+
+# ── Binance broker test suite (Phase 1 / S5, standalone) ──
+add_executable(test_binance_broker
+  tests/test_binance_broker_main.cpp
+  tests/test_binance_broker.cpp)
+target_include_directories(test_binance_broker PRIVATE include tests src/llm)
+target_link_libraries(test_binance_broker PRIVATE af_engine af_llm)
+set_target_properties(test_binance_broker PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME BinanceBrokerTests COMMAND test_binance_broker)
 
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")
