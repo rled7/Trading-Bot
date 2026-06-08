@@ -54,6 +54,7 @@ set(CPP_SOURCES
   src/broker/oanda_broker.cpp
   src/broker/alpaca_broker.cpp
   src/broker/binance_broker.cpp
+  src/broker/coinbase_broker.cpp
   src/data/bar_store.cpp
   src/data/trade_journal.cpp
   src/data/csv_bars.cpp
@@ -229,5 +230,14 @@ target_include_directories(test_binance_broker PRIVATE include tests src/llm)
 target_link_libraries(test_binance_broker PRIVATE af_engine af_llm)
 set_target_properties(test_binance_broker PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME BinanceBrokerTests COMMAND test_binance_broker)
+
+# ── Coinbase broker test suite (Phase 1 / S5, standalone) ──
+add_executable(test_coinbase_broker
+  tests/test_coinbase_broker_main.cpp
+  tests/test_coinbase_broker.cpp)
+target_include_directories(test_coinbase_broker PRIVATE include tests src/llm)
+target_link_libraries(test_coinbase_broker PRIVATE af_engine af_llm)
+set_target_properties(test_coinbase_broker PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME CoinbaseBrokerTests COMMAND test_coinbase_broker)
 
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")

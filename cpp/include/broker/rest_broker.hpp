@@ -432,7 +432,7 @@ protected:
 };
 
 /* ── Coinbase Advanced Trade REST ── */
-class CoinbaseBroker final : public RestBroker {
+class CoinbaseBroker : public RestBroker {
 public:
     static constexpr const char* BROKER_NAME = "coinbase";
     static constexpr const char* LIVE_URL    = "https://api.coinbase.com/api/v3/brokerage";
@@ -475,7 +475,7 @@ protected:
                                   const std::string& body,
                                   const std::map<std::string,std::string>& hdrs) const override;
 
-private:
+protected:   /* protected so parity-test subclasses can register tickets — see test_coinbase_broker.cpp */
     mutable std::unordered_map<std::string, uint64_t> id_to_ticket_;
     mutable std::unordered_map<uint64_t, std::string> ticket_to_id_;
     mutable uint64_t next_ticket_{1};
