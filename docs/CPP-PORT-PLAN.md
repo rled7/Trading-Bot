@@ -88,6 +88,17 @@ S6 exists in no language and has no tested reference — highest-throwaway risk.
   "Dashboard SSE (Python only)" — a FastAPI router; compute lives in the already-ported
   `streaming.py`/`streaming.cpp`). It therefore belongs to **Phase 5 (web, LAST)**, not Phase 3.
 
+- 2026-06-09: **Phase 4 (S6 discovery daemon) BUILT** — user authorized "spec-first then build".
+  Spec `docs/s6_spec.md` (6 locked decisions + synthetic oracle). Implementation
+  `cpp/include/s6/discovery_daemon.hpp` + `cpp/src/s6/discovery_daemon.cpp` (lib `af_s6`):
+  orchestration only — reuses `af::classify_regime`, `generate_balanced`, `validate`, `promote`.
+  Determinism via injected `generate_fn`/`validate_fn` (default to the real pipeline; tests
+  override). `test_s6` golden oracle 7/7 (no-false-positive, single-crossing→single-emit,
+  rate-limit cap, validator-reject-writes-nothing, tier-floor, bounded-memory, pause-during-live).
+  **Full ctest 13/13.** af_s6 links af_algo_gen + af_engine cleanly (lazy static linking resolves
+  the shared indicators.c; no duplicate-symbol clash). NOTE: this lifts Phase 4 off the wall;
+  remaining items below are still the user's calls.
+
 ## ⏸️ DECISION WALL (2026-06-09) — reference-backed work is exhausted
 Everything still buildable is now either a user decision or a platform impossibility:
 - **MT5 (Phase 3 remainder)** — hard-blocked: proprietary MetaTrader5 DLL + Windows host,

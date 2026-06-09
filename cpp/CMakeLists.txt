@@ -263,4 +263,21 @@ target_link_libraries(test_generator PRIVATE af_algo_gen af_llm)
 set_target_properties(test_generator PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME GeneratorTests COMMAND test_generator)
 
+# ── S6 discovery daemon (Phase 4) ──
+# Orchestration layer above af_algo_gen (generate/validate/promote) + af_engine
+# (af::classify_regime). Links both; static archives resolve the shared indicators.c
+# symbols lazily (af_algo_gen pulled first), so no duplicate-symbol clash.
+add_library(af_s6 STATIC src/s6/discovery_daemon.cpp)
+target_include_directories(af_s6 PUBLIC include PRIVATE src/algo_gen)
+target_link_libraries(af_s6 PUBLIC af_algo_gen af_engine)
+set_target_properties(af_s6 PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+
+add_executable(test_s6
+  tests/test_s6_main.cpp
+  tests/test_s6.cpp)
+target_include_directories(test_s6 PRIVATE include tests src src/algo_gen)
+target_link_libraries(test_s6 PRIVATE af_s6)
+set_target_properties(test_s6 PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME S6Tests COMMAND test_s6 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")
