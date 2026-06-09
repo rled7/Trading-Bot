@@ -72,3 +72,29 @@ S6 exists in no language and has no tested reference — highest-throwaway risk.
   Remaining Phase 2 = wire generator into a CLI/entry if/when needed (not required for parity).
 - 2026-06-08: **§S6 DECISIONS LOCKED** — user accepted all 6 proposed defaults verbatim
   (2026-06-08). S6 is no longer user-blocked; it is future work downstream of Phases 2–3.
+- 2026-06-09: **C++ test suite 12/12 GREEN** — fixed the last failing suite (`AlgoGenTests`).
+  Root cause was a CMake bug, not a logic gap: `FIXTURE_DIR` pointed at the non-existent
+  `cpp/tests/fixtures` (CMAKE_SOURCE_DIR is the cpp/ subdir). Repointed to the canonical
+  repo-root `../tests/fixtures` shared with the Python oracle (truest parity, no drift).
+  No regressions (GeneratorTests/PromptsTests still green under the now-valid path).
+- 2026-06-09: **Phase 1 verified fully closed** — config + registry are ported AND tested
+  (consolidated into `rest_broker.hpp`: `BrokerConfig::from_env()/require()` mirrors config.py;
+  `make_broker()/available_brokers()` mirrors registry.py; covered by `test_rest_broker.cpp`
+  TestRegistry/TestConfigFromEnv, RestBrokerTests 41/41).
+- 2026-06-09: **Phase 3 analytics compute = already DONE** — `cpp/src/analytics/` already
+  mirrors the Python analytics package (correlations, distributions, drawdown, factors,
+  html_report, metrics, ml_attribution, montecarlo, streaming, walkforward) + `test_analytics`.
+  The only unmirrored file, `analytics/dashboard.py`, is **pure web** (its own docstring:
+  "Dashboard SSE (Python only)" — a FastAPI router; compute lives in the already-ported
+  `streaming.py`/`streaming.cpp`). It therefore belongs to **Phase 5 (web, LAST)**, not Phase 3.
+
+## ⏸️ DECISION WALL (2026-06-09) — reference-backed work is exhausted
+Everything still buildable is now either a user decision or a platform impossibility:
+- **MT5 (Phase 3 remainder)** — hard-blocked: proprietary MetaTrader5 DLL + Windows host,
+  not portable on macOS/Linux. Intentional WIN32-only stub. *Not a decision — an impossibility.*
+- **Phase 4 (S6 daemon)** — decisions are locked, but S6 *exists in no language and has no
+  tested oracle*. Building it = guessing on unspecified behavior with nothing to assert parity
+  against (violates governing rules 1 & 3). **Should be user-steered, not built autonomously.**
+- **Phase 5 (dashboard web)** — explicitly LAST; the user reserved a scope-revision checkpoint
+  here before sinking days into the least-defensible piece. *User decision.*
+- **Phase 6 (flip production to C++)** — only after the above; decide Python's fate. *User decision.*

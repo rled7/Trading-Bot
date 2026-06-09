@@ -183,7 +183,10 @@ add_executable(test_algo_gen
 target_include_directories(test_algo_gen PRIVATE include tests src/algo_gen)
 target_link_libraries(test_algo_gen PRIVATE af_algo_gen)
 target_compile_definitions(test_algo_gen PRIVATE
-  FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures")
+  # Canonical fixtures live at the repo-root tests/ tree (shared with the Python
+  # oracle); CMAKE_SOURCE_DIR is the cpp/ subdir, so step up one level. Using the
+  # same fixtures as Python is the truest parity gate (no duplicated copies to drift).
+  FIXTURE_DIR="${CMAKE_SOURCE_DIR}/../tests/fixtures")
 set_target_properties(test_algo_gen PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME AlgoGenTests COMMAND test_algo_gen
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
