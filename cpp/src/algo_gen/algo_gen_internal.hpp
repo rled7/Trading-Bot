@@ -223,5 +223,11 @@ GenResult generate_fast(const std::string& brief,
                         int seed = 42,
                         const std::string& model = "llama3.1:8b");
 
+/* Two-pass balanced generation: initial manifest, then a critique + revision turn. */
+GenResult generate_balanced(const std::string& brief,
+                            algoforge::llm::LLMProvider& provider,
+                            int seed = 42,
+                            const std::string& model = "qwen2.5:32b");
+
 } /* namespace generator */
 } /* namespace algoforge::algo_gen */

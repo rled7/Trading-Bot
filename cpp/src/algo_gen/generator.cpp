@@ -57,9 +57,34 @@ std::string chat(LLMProvider& p, const std::vector<ChatMessage>& msgs, const std
 }
 
 /* extract JSON + schema-validate; throws std::exception on failure. */
-AlgoManifest extract_validate(const std::string& raw) {
+std::pair<json::JsonValue, AlgoManifest> extract_validate(const std::string& raw) {
     json::JsonValue d = prompts::extract_json_block(raw);  /* throws if no JSON */
-    return parse_manifest(dumps(d));                         /* throws on schema error */
+    AlgoManifest m = parse_manifest(dumps(d));             /* throws on schema error */
+    return {d, m};
+}
+
+/* One LLM call + parse, with a single fix-JSON retry. Records turns +
+ * parse_failures into trace. Throws GenerationError after two failures. */
+std::pair<json::JsonValue, AlgoManifest> generate_with_retry(
+        LLMProvider& provider, std::vector<ChatMessage> messages,
+        const std::string& model, int seed, GenerationTrace& trace) {
+    std::string raw = chat(provider, messages, model, seed);
+    trace.turns.push_back({"assistant", raw});
+    try { return extract_validate(raw); }
+    catch (const std::exception& e) { trace.parse_failures.push_back({raw, e.what()}); }
+
+    std::vector<ChatMessage> retry = messages;
+    retry.push_back({"assistant", raw});
+    retry.push_back({"user", FIX_JSON_PROMPT});
+    trace.turns.push_back({"user", FIX_JSON_PROMPT});
+
+    std::string raw2 = chat(provider, retry, model, seed);
+    trace.turns.push_back({"assistant", raw2});
+    try { return extract_validate(raw2); }
+    catch (const std::exception& e2) {
+        trace.parse_failures.push_back({raw2, e2.what()});
+        throw GenerationError(std::string("Failed to produce a valid manifest after 2 attempts. Last error: ") + e2.what());
+    }
 }
 
 } /* anonymous namespace */
@@ -69,31 +94,41 @@ GenResult generate_fast(const std::string& brief, LLMProvider& provider,
     GenerationTrace trace;
     trace.mode = "fast"; trace.model = model; trace.seed = seed;
 
-    std::string system_content = prompts::FAST_SYSTEM;
-    std::string user_content   = prompts::render_fast_user(brief);
-    std::vector<ChatMessage> messages = {{"system", system_content}, {"user", user_content}};
-    trace.turns.push_back({"system", system_content});
-    trace.turns.push_back({"user",   user_content});
+    std::string sys = prompts::FAST_SYSTEM;
+    std::string usr = prompts::render_fast_user(brief);
+    std::vector<ChatMessage> messages = {{"system", sys}, {"user", usr}};
+    trace.turns.push_back({"system", sys});
+    trace.turns.push_back({"user",   usr});
 
-    /* Attempt 1 */
-    std::string raw = chat(provider, messages, model, seed);
-    trace.turns.push_back({"assistant", raw});
-    try { return {extract_validate(raw), trace}; }
-    catch (const std::exception& e) { trace.parse_failures.push_back({raw, e.what()}); }
+    auto [d, m] = generate_with_retry(provider, messages, model, seed, trace);
+    (void)d;
+    return {m, trace};
+}
 
-    /* Retry once with a fix-JSON follow-up */
-    std::vector<ChatMessage> retry = messages;
-    retry.push_back({"assistant", raw});
-    retry.push_back({"user", FIX_JSON_PROMPT});
-    trace.turns.push_back({"user", FIX_JSON_PROMPT});
+GenResult generate_balanced(const std::string& brief, LLMProvider& provider,
+                            int seed, const std::string& model) {
+    GenerationTrace trace;
+    trace.mode = "balanced"; trace.model = model; trace.seed = seed;
 
-    std::string raw2 = chat(provider, retry, model, seed);
-    trace.turns.push_back({"assistant", raw2});
-    try { return {extract_validate(raw2), trace}; }
-    catch (const std::exception& e2) {
-        trace.parse_failures.push_back({raw2, e2.what()});
-        throw GenerationError(std::string("Failed to produce a valid manifest after 2 attempts. Last error: ") + e2.what());
-    }
+    std::string sys = prompts::BALANCED_SYSTEM;
+    std::string usr = prompts::render_balanced_user(brief);
+    std::vector<ChatMessage> messages = {{"system", sys}, {"user", usr}};
+    trace.turns.push_back({"system", sys});
+    trace.turns.push_back({"user",   usr});
+
+    /* Turn 1: initial manifest */
+    auto [initial_d, initial_m] = generate_with_retry(provider, messages, model, seed, trace);
+    (void)initial_m;
+
+    /* Turn 2: critique + revision */
+    std::string critique = prompts::render_balanced_critique(initial_d);
+    messages.push_back({"assistant", dumps(initial_d)});
+    messages.push_back({"user", critique});
+    trace.turns.push_back({"user", critique});
+
+    auto [revised_d, revised_m] = generate_with_retry(provider, messages, model, seed, trace);
+    (void)revised_d;
+    return {revised_m, trace};
 }
 
 } /* namespace generator */

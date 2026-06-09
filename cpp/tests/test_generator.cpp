@@ -54,6 +54,22 @@ static const char* VALID_MANIFEST = R"(```json
 }
 ```)";
 
+/* a second, distinct valid manifest (for balanced revision) */
+static const char* REVISED_MANIFEST = R"(```json
+{
+  "schema_version": "1.0",
+  "name": "revised-algo",
+  "description": "Revised strategy.",
+  "rationale": "Addressed weaknesses.",
+  "timeframes": ["H1"],
+  "symbols": ["EURUSD"],
+  "indicators": [{"id": "rsi14", "kind": "rsi", "params": {"period": 14}}],
+  "entries": [{"side": "long", "when": "rsi14 < 30.0"}],
+  "exits": [{"side": "long", "sl_atr": 2.0, "tp_atr": 4.0}],
+  "risk": {"size": "atr", "atr_mult": 2.0, "fixed_lots": 0.01, "max_concurrent": 1, "hedge": false, "cool_down_bars": 0}
+}
+```)";
+
 /* valid JSON, but fails schema validation (missing required fields) */
 static const char* SCHEMA_INVALID = "```json\n{\"foo\": 1}\n```";
 /* not JSON at all */
@@ -61,6 +77,10 @@ static const char* MALFORMED = "Sorry, I cannot produce that.";
 
 static bool turns_have(const generator::GenerationTrace& t, const std::string& content) {
     for (auto& [role, c] : t.turns) if (c == content) return true;
+    return false;
+}
+static bool turns_contain(const generator::GenerationTrace& t, const std::string& sub) {
+    for (auto& [role, c] : t.turns) if (c.find(sub) != std::string::npos) return true;
     return false;
 }
 
@@ -115,5 +135,30 @@ void test_generator(TestRunner T) {
         try { generator::generate_fast("x", p); }
         catch (const generator::GenerationError&) { threw = true; }
         CHK(threw);
+    });
+
+    section("generate_balanced — two-pass + critique");
+    T("returns_revised_manifest_and_balanced_trace", []{
+        MockProvider p({VALID_MANIFEST, REVISED_MANIFEST});
+        auto r = generator::generate_balanced("x", p);
+        CHK(r.manifest.name == "revised-algo");   /* the REVISED manifest, not initial */
+        CHK(r.trace.mode == "balanced");
+        CHK_EQ((int)p.idx, 2);                     /* two generation turns */
+    });
+    T("revised_differs_from_initial", []{
+        MockProvider p({VALID_MANIFEST, REVISED_MANIFEST});
+        auto r = generator::generate_balanced("x", p);
+        CHK(r.manifest.name != "test-algo");
+    });
+    T("trace_records_critique_turn", []{
+        MockProvider p({VALID_MANIFEST, REVISED_MANIFEST});
+        auto r = generator::generate_balanced("x", p);
+        CHK(turns_contain(r.trace, "3 weaknesses"));   /* critique prompt was recorded */
+    });
+    T("revised_manifest_schema_valid", []{
+        MockProvider p({VALID_MANIFEST, REVISED_MANIFEST});
+        auto r = generator::generate_balanced("x", p);
+        CHK(!r.manifest.name.empty());
+        CHK((int)r.manifest.indicators.size() >= 1);
     });
 }
