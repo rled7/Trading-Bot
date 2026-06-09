@@ -185,3 +185,43 @@ extern const char* MAX_SYSTEM;
 } /* namespace prompts */
 
 } /* namespace algoforge::algo_gen */
+
+/* =========================================================================
+ * Generator — LLM-driven manifest generation (S1).
+ * Python oracle: python/algoforge/algo_gen/generator.py
+ * NOTE: the escape-hatch SANDBOX is NOT ported — it is a Python-subprocess
+ * executor for Python code with no honest C++ analog (CPP-PORT-PLAN: flag,
+ * don't fake). The C++ engine already skips escape-hatch manifests in
+ * validate() ("escape_hatch_skip_cpp").
+ * ========================================================================= */
+#include "core/llm.hpp"
+
+namespace algoforge::algo_gen {
+namespace generator {
+
+struct GenerationError : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
+struct GenerationTrace {
+    std::string mode;
+    std::string model;
+    int         seed = 42;
+    std::vector<std::pair<std::string,std::string>> turns;          // (role, content)
+    std::vector<std::pair<std::string,std::string>> parse_failures; // (raw, error)
+};
+
+struct GenResult {
+    AlgoManifest    manifest;
+    GenerationTrace trace;
+};
+
+/* Single-pass fast generation. Retries once with a "fix JSON" follow-up on a
+ * parse/schema failure; raises GenerationError after two consecutive failures. */
+GenResult generate_fast(const std::string& brief,
+                        algoforge::llm::LLMProvider& provider,
+                        int seed = 42,
+                        const std::string& model = "llama3.1:8b");
+
+} /* namespace generator */
+} /* namespace algoforge::algo_gen */
