@@ -58,3 +58,17 @@ S6 exists in no language and has no tested reference — highest-throwaway risk.
 
 ## Progress log
 - 2026-06-01: Plan created, decision locked. Phase 1 (S5 C++ adapters) launched.
+- 2026-06-08: **Phase 1 S5 COMPLETE** — all 5 REST broker adapters ported + parity-green +
+  pushed (IBKR 65, OANDA 74, Alpaca 33, Binance 28, Coinbase 24; rest_broker 41; af_tests 102).
+  Added `core/hmac_sha256.hpp` (verified vs openssl). MT5 left as the intended WIN32-only stub
+  (Phase 3; proprietary DLL not in repo — not portable on macOS/Linux).
+- 2026-06-08: **Phase 2 algo_gen — prompts + generator DONE** (branch cpp-port-phase1):
+  `prompts.cpp` (extract_json_block + renderers, 10/10) + `generator.cpp` (generate_fast/
+  balanced/max against a mock LLMProvider, 17/17). Commits 81d4b74 → 0f07bdd.
+  ⛔ **sandbox.py is a HARD BLOCKER — NOT ported (flag, don't fake).** It is a Python
+  *subprocess* executor for user-generated *Python* escape-hatch code (`sys.executable -S -I`);
+  there is no honest C++ analog. The C++ engine already treats escape-hatch manifests as a
+  deterministic skip in `validate()` ("escape_hatch_skip_cpp"), which is the correct C++ stance.
+  Remaining Phase 2 = wire generator into a CLI/entry if/when needed (not required for parity).
+- 2026-06-08: **§S6 DECISIONS LOCKED** — user accepted all 6 proposed defaults verbatim
+  (2026-06-08). S6 is no longer user-blocked; it is future work downstream of Phases 2–3.
