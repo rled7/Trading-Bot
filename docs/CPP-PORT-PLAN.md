@@ -99,6 +99,20 @@ S6 exists in no language and has no tested reference — highest-throwaway risk.
   the shared indicators.c; no duplicate-symbol clash). NOTE: this lifts Phase 4 off the wall;
   remaining items below are still the user's calls.
 
+- 2026-06-09: **Phase 5 (dashboard) SLICE 1 BUILT** — user authorized "build Phase 5".
+  Vendored header-only **cpp-httplib v0.18.3** (`cpp/third_party/httplib/`, MIT) — the C++ tree
+  had no HTTP server. New `af_dashboard` lib: pure parity-tested handlers
+  (`dashboard/handlers.hpp/.cpp`: health/symbols/logs JSON + `clamp_log_count`) + `log_buffer.hpp`
+  (ports `log_buffer.py` LogRingBuffer, incl. Python `tail()` n>=size semantics) + a THIN
+  httplib socket binding (`server.cpp`, untested-by-design, same discipline as S6's thread
+  wrapper / the brokers' MockTransport). SSE feasibility proven via `/api/stream/demo` chunked
+  content provider (the one real risk — works). `test_dashboard` 7/7; **full ctest 14/14.**
+  Python oracle: `python/algoforge/dashboard/{server.py,log_buffer.py}` + `python/tests/dashboard/`.
+  REMAINING Phase 5 (slice 2+, reference-backed, incremental): broker-backed routes
+  (account/positions/orders/bars via the ported IBroker), llm routes (health/models/chat +
+  chat/stream SSE), algo_gen routes (`algo_gen_routes.py`: list/generate/generate-stream/backtest),
+  auth dependency, real analytics SSE wired to `streaming.cpp`. Each is a route-at-a-time port.
+
 ## ⏸️ DECISION WALL (2026-06-09) — reference-backed work is exhausted
 Everything still buildable is now either a user decision or a platform impossibility:
 - **MT5 (Phase 3 remainder)** — hard-blocked: proprietary MetaTrader5 DLL + Windows host,

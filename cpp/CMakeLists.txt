@@ -280,4 +280,22 @@ target_link_libraries(test_s6 PRIVATE af_s6)
 set_target_properties(test_s6 PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME S6Tests COMMAND test_s6 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# ── Dashboard (Phase 5, slice 1) ──
+# Pure handlers + log buffer (all logic, parity-tested) + a thin httplib socket
+# binding (server.cpp, untested by design). httplib is header-only (third_party).
+add_library(af_dashboard STATIC
+  src/dashboard/handlers.cpp
+  src/dashboard/server.cpp)
+target_include_directories(af_dashboard PUBLIC include third_party/httplib)
+set_target_properties(af_dashboard PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+target_link_libraries(af_dashboard PUBLIC Threads::Threads)
+
+add_executable(test_dashboard
+  tests/test_dashboard_main.cpp
+  tests/test_dashboard.cpp)
+target_include_directories(test_dashboard PRIVATE include tests)
+target_link_libraries(test_dashboard PRIVATE af_dashboard)
+set_target_properties(test_dashboard PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME DashboardTests COMMAND test_dashboard WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")
