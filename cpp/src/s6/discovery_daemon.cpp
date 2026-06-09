@@ -170,16 +170,9 @@ DiscoveryEvent DiscoveryDaemon::observe(const Bar& bar, int64_t now_ms) {
 }
 
 // ── Thin background-thread wrapper (Decision 6). No logic beyond the loop. ──
-namespace {
-struct FeedItem { Bar bar; int64_t now_ms; };
-std::mutex                  g_mtx;
-std::condition_variable     g_cv;
-std::queue<FeedItem>        g_queue;
-}
-
 void DiscoveryDaemon::feed(const Bar& bar, int64_t now_ms) {
-    { std::lock_guard<std::mutex> lk(g_mtx); g_queue.push({bar, now_ms}); }
-    g_cv.notify_one();
+    { std::lock_guard<std::mutex> lk(q_mtx_); queue_.push({bar, now_ms}); }
+    q_cv_.notify_one();
 }
 
 void DiscoveryDaemon::run() {
@@ -188,11 +181,11 @@ void DiscoveryDaemon::run() {
         while (running_.load()) {
             FeedItem item;
             {
-                std::unique_lock<std::mutex> lk(g_mtx);
-                g_cv.wait_for(lk, std::chrono::milliseconds(100),
-                              []{ return !g_queue.empty(); });
-                if (g_queue.empty()) continue;
-                item = g_queue.front(); g_queue.pop();
+                std::unique_lock<std::mutex> lk(q_mtx_);
+                q_cv_.wait_for(lk, std::chrono::milliseconds(100),
+                               [this]{ return !queue_.empty(); });
+                if (queue_.empty()) continue;
+                item = queue_.front(); queue_.pop();
             }
             observe(item.bar, item.now_ms);
         }
@@ -201,7 +194,7 @@ void DiscoveryDaemon::run() {
 
 void DiscoveryDaemon::stop() {
     if (!running_.exchange(false)) return;
-    g_cv.notify_all();
+    q_cv_.notify_all();
     if (worker_.joinable()) worker_.join();
 }
 

@@ -12,6 +12,7 @@
 #include "httplib.h"
 #include "dashboard/handlers.hpp"
 #include "dashboard/log_buffer.hpp"
+#include "broker/broker.hpp"
 
 #include <cstdlib>
 #include <fstream>
@@ -19,6 +20,7 @@
 #include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace algoforge::dashboard {
 
@@ -26,6 +28,7 @@ struct ServerDeps {
     std::string                                       version = "dev";
     std::vector<std::string>                          symbols;
     LogRingBuffer*                                    logs = nullptr;
+    const af::IBroker*                                broker = nullptr;  // slice 2 data source
     std::function<std::pair<std::string, bool>()>     broker_status;  // (name, connected)
     std::function<double()>                           uptime;
     std::string                                       static_dir;
@@ -49,6 +52,46 @@ void register_routes(httplib::Server& srv, ServerDeps deps) {
         n = clamp_log_count(n);
         std::vector<LogRecord> recs = deps.logs ? deps.logs->tail(n) : std::vector<LogRecord>{};
         res.set_content(logs_json(recs), "application/json");
+    });
+
+    // ── Slice 2: broker-backed routes (server.py account/positions/orders/bars) ──
+    srv.Get("/api/account", [deps](const httplib::Request&, httplib::Response& res) {
+        if (!deps.broker) { res.status = 503; return; }
+        AF_AccountInfo a{};
+        deps.broker->get_account(a);
+        res.set_content(account_json(a), "application/json");
+    });
+
+    srv.Get("/api/positions", [deps](const httplib::Request&, httplib::Response& res) {
+        if (!deps.broker) { res.status = 503; return; }
+        res.set_content(positions_json(deps.broker->get_positions()), "application/json");
+    });
+
+    srv.Get("/api/orders", [deps](const httplib::Request&, httplib::Response& res) {
+        if (!deps.broker) { res.status = 503; return; }
+        res.set_content(orders_json(deps.broker->get_orders()), "application/json");
+    });
+
+    srv.Get(R"(/api/bars/([^/]+))", [deps](const httplib::Request& req, httplib::Response& res) {
+        if (!deps.broker) { res.status = 503; return; }
+        const std::string symbol = req.matches[1];
+        const std::string tf = req.has_param("tf") ? req.get_param_value("tf") : "M5";
+        AF_Timeframe tf_enum;
+        if (!parse_timeframe(tf, tf_enum)) {
+            std::string valid;
+            for (const auto& n : timeframe_names()) { if (!valid.empty()) valid += ", "; valid += n; }
+            res.status = 422;
+            res.set_content("{\"detail\":\"Invalid tf '" + json_escape(tf) +
+                            "'. Must be one of: [" + valid + "]\"}", "application/json");
+            return;
+        }
+        int count = req.has_param("count") ? std::atoi(req.get_param_value("count").c_str()) : 200;
+        count = clamp_bar_count(count);
+        std::vector<AF_Bar> bars(static_cast<size_t>(count));
+        int filled = 0;
+        deps.broker->get_bars(symbol.c_str(), tf_enum, count, bars.data(), &filled);
+        bars.resize(filled > 0 ? static_cast<size_t>(filled) : 0);
+        res.set_content(bars_json(bars), "application/json");
     });
 
     if (!deps.static_dir.empty()) {

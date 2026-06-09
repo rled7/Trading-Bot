@@ -13,11 +13,14 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <deque>
 #include <filesystem>
 #include <functional>
+#include <mutex>
 #include <optional>
+#include <queue>
 #include <string>
 #include <thread>
 #include <vector>
@@ -104,6 +107,12 @@ private:
     std::atomic<bool>           live_session_{false};
     std::atomic<bool>           running_{false};
     std::thread                 worker_;
+
+    // Per-instance feed queue for the background thread (Decision 6).
+    struct FeedItem { Bar bar; int64_t now_ms; };
+    std::mutex                  q_mtx_;
+    std::condition_variable     q_cv_;
+    std::queue<FeedItem>        queue_;
 };
 
 } // namespace algoforge::s6

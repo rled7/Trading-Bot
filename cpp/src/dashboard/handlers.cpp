@@ -73,4 +73,105 @@ std::string logs_json(const std::vector<LogRecord>& records) {
 
 int clamp_log_count(int n) { return std::max(1, std::min(n, 500)); }
 
+// ── Slice 2: broker-backed serialisers ──
+
+namespace {
+// Compact double formatter (avoids scientific notation; trims to JSON-friendly form).
+std::string num(double v) {
+    std::ostringstream o; o << v; return o.str();
+}
+std::string cstr(const char* s) { return json_escape(s ? std::string(s) : std::string()); }
+} // namespace
+
+std::string account_json(const AF_AccountInfo& a) {
+    std::ostringstream o;
+    o << "{\"balance\":" << num(a.balance)
+      << ",\"equity\":" << num(a.equity)
+      << ",\"margin\":" << num(a.margin)
+      << ",\"free_margin\":" << num(a.free_margin)
+      << ",\"profit\":" << num(a.profit)
+      << ",\"leverage\":" << a.leverage
+      << ",\"currency\":\"" << cstr(a.currency) << "\""
+      << ",\"login\":" << a.login << "}";
+    return o.str();
+}
+
+std::string position_json(const AF_Position& p) {
+    std::ostringstream o;
+    o << "{\"ticket\":" << p.ticket
+      << ",\"symbol\":\"" << cstr(p.symbol) << "\""
+      << ",\"side\":" << static_cast<int>(p.side)
+      << ",\"lots\":" << num(p.lots)
+      << ",\"open_price\":" << num(p.open_price)
+      << ",\"current_price\":" << num(p.current_price)
+      << ",\"sl\":" << num(p.sl)
+      << ",\"tp\":" << num(p.tp)
+      << ",\"profit\":" << num(p.profit)
+      << ",\"commission\":" << num(p.commission)
+      << ",\"swap\":" << num(p.swap)
+      << ",\"open_time\":" << p.open_time
+      << ",\"magic\":" << p.magic
+      << ",\"comment\":\"" << cstr(p.comment) << "\"}";
+    return o.str();
+}
+
+std::string order_json(const AF_Order& o_) {
+    std::ostringstream o;
+    o << "{\"ticket\":" << o_.ticket
+      << ",\"symbol\":\"" << cstr(o_.symbol) << "\""
+      << ",\"type\":" << static_cast<int>(o_.type)
+      << ",\"lots\":" << num(o_.lots)
+      << ",\"price\":" << num(o_.price)
+      << ",\"sl\":" << num(o_.sl)
+      << ",\"tp\":" << num(o_.tp)
+      << ",\"fill_price\":" << num(o_.fill_price)
+      << ",\"open_time\":" << o_.open_time
+      << ",\"fill_time\":" << o_.fill_time
+      << ",\"magic\":" << o_.magic
+      << ",\"comment\":\"" << cstr(o_.comment) << "\""
+      << ",\"client_id\":\"" << cstr(o_.client_id) << "\"}";
+    return o.str();
+}
+
+std::string bar_json(const AF_Bar& b) {
+    std::ostringstream o;
+    o << "{\"timestamp\":" << b.timestamp
+      << ",\"open\":" << num(b.open)
+      << ",\"high\":" << num(b.high)
+      << ",\"low\":" << num(b.low)
+      << ",\"close\":" << num(b.close)
+      << ",\"volume\":" << num(b.volume)
+      << ",\"spread\":" << num(b.spread) << "}";
+    return o.str();
+}
+
+namespace {
+template <class T, class F>
+std::string json_array(const std::vector<T>& xs, F one) {
+    std::string out = "[";
+    for (size_t i = 0; i < xs.size(); ++i) { if (i) out += ","; out += one(xs[i]); }
+    out += "]";
+    return out;
+}
+} // namespace
+
+std::string positions_json(const std::vector<AF_Position>& ps) { return json_array(ps, position_json); }
+std::string orders_json(const std::vector<AF_Order>& os)       { return json_array(os, order_json); }
+std::string bars_json(const std::vector<AF_Bar>& bs)           { return json_array(bs, bar_json); }
+
+bool parse_timeframe(const std::string& name, AF_Timeframe& out) {
+    static const std::vector<std::pair<std::string, AF_Timeframe>> tfs = {
+        {"S15", AF_TF_S15}, {"M1", AF_TF_M1}, {"M5", AF_TF_M5}, {"M15", AF_TF_M15},
+        {"M30", AF_TF_M30}, {"H1", AF_TF_H1}, {"H4", AF_TF_H4}, {"D1", AF_TF_D1}, {"W1", AF_TF_W1},
+    };
+    for (const auto& [n, v] : tfs) if (n == name) { out = v; return true; }
+    return false;
+}
+
+std::vector<std::string> timeframe_names() {
+    return {"S15", "M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"};
+}
+
+int clamp_bar_count(int count) { return std::max(1, std::min(count, 5000)); }
+
 } // namespace algoforge::dashboard
