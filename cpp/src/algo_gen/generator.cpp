@@ -11,6 +11,7 @@
 #include "algo_gen_internal.hpp"
 #include "core/algo_gen.hpp"
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -129,6 +130,83 @@ GenResult generate_balanced(const std::string& brief, LLMProvider& provider,
     auto [revised_d, revised_m] = generate_with_retry(provider, messages, model, seed, trace);
     (void)revised_d;
     return {revised_m, trace};
+}
+
+GenResult generate_max(const std::string& brief, LLMProvider& provider, int seed,
+                       int n_candidates, LLMProvider* reasoning_provider,
+                       const std::string& model) {
+    LLMProvider& gen = reasoning_provider ? *reasoning_provider : provider;
+
+    GenerationTrace trace;
+    trace.mode = "max"; trace.model = model; trace.seed = seed;
+    trace.reasoning_model = reasoning_provider ? model : std::string();
+    if (!reasoning_provider)
+        trace.warnings.push_back("reasoning_provider=None: fell back to main provider for generation");
+
+    static const char* HINTS[] = {
+        "momentum breakout above resistance using ATR bands",
+        "mean reversion to moving average after oversold RSI signal",
+        "volatility contraction then expansion with Bollinger bands",
+        "trend following with ADX filter for strong directional markets",
+        "multi-timeframe confluence using EMA slopes and RSI divergence",
+        "stochastic oscillator crossover with volume confirmation",
+        "keltner channel breakout with OBV divergence filter",
+    };
+    const int N_HINTS = 7;
+
+    const std::string sys = prompts::MAX_SYSTEM;
+    trace.turns.push_back({"system", sys});
+
+    struct Cand { CandidateSummary s; AlgoManifest m; bool ok = false; };
+    std::vector<Cand> cands;
+
+    /* Phase 1: generate n candidates (no canonical bars → graceful sharpe=0). */
+    for (int i = 0; i < n_candidates; ++i) {
+        std::string usr = prompts::render_max_user(brief, i + 1, n_candidates, HINTS[i % N_HINTS]);
+        std::vector<ChatMessage> messages = {{"system", sys}, {"user", usr}};
+        trace.turns.push_back({"user", usr});
+
+        Cand c; c.s.index = i; c.s.max_dd = 100.0;
+        try {
+            auto [d, m] = generate_with_retry(gen, messages, model, seed + i, trace);
+            (void)d;
+            c.m = m; c.ok = true; c.s.has_manifest = true; c.s.name = m.name; c.s.sharpe = 0.0;
+        } catch (const GenerationError& e) {
+            c.s.error = e.what(); c.s.sharpe = -999.0;
+        }
+        cands.push_back(std::move(c));
+    }
+    for (const auto& c : cands) trace.candidates.push_back(c.s);
+
+    /* Phase 2: top-2 valid candidates by sharpe. */
+    std::vector<int> valid;
+    for (int i = 0; i < (int)cands.size(); ++i) if (cands[i].ok) valid.push_back(i);
+    if (valid.empty()) throw GenerationError("All candidates failed to generate valid manifests");
+    std::sort(valid.begin(), valid.end(), [&](int a, int b){ return cands[a].s.sharpe > cands[b].s.sharpe; });
+    std::vector<int> top2(valid.begin(), valid.begin() + std::min<size_t>(2, valid.size()));
+
+    /* Phase 3: critique + revise the top 2. */
+    std::vector<std::pair<AlgoManifest,double>> refined;
+    for (int idx : top2) {
+        trace.candidates[idx].critiqued = true;
+        std::string crit = prompts::render_max_critique(json::JsonValue{}, cands[idx].s.trades,
+                                                        cands[idx].s.sharpe, cands[idx].s.max_dd);
+        std::vector<ChatMessage> messages = {{"system", sys}, {"user", crit}};
+        trace.turns.push_back({"user", crit});
+        try {
+            auto [rd, rm] = generate_with_retry(gen, messages, model, seed + 100 + cands[idx].s.index, trace);
+            (void)rd;
+            refined.push_back({rm, cands[idx].s.sharpe});
+        } catch (const GenerationError&) {
+            refined.push_back({cands[idx].m, cands[idx].s.sharpe});  /* fall back to original */
+        }
+    }
+    if (refined.empty()) return {cands[valid[0]].m, trace};
+
+    std::sort(refined.begin(), refined.end(), [](const auto& a, const auto& b){ return a.second > b.second; });
+    AlgoManifest winner = refined[0].first;
+    for (auto& c : trace.candidates) if (c.has_manifest && c.name == winner.name) { c.is_final = true; break; }
+    return {winner, trace};
 }
 
 } /* namespace generator */

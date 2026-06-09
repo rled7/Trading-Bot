@@ -203,12 +203,27 @@ struct GenerationError : std::runtime_error {
     using std::runtime_error::runtime_error;
 };
 
+struct CandidateSummary {
+    int         index        = 0;
+    bool        has_manifest = false;
+    std::string name;
+    double      sharpe       = 0.0;
+    int         trades       = 0;
+    double      max_dd       = 0.0;
+    std::string error;
+    bool        critiqued    = false;
+    bool        is_final     = false;
+};
+
 struct GenerationTrace {
     std::string mode;
     std::string model;
+    std::string reasoning_model;                                    // empty unless max + reasoning provider
     int         seed = 42;
     std::vector<std::pair<std::string,std::string>> turns;          // (role, content)
     std::vector<std::pair<std::string,std::string>> parse_failures; // (raw, error)
+    std::vector<std::string>      warnings;                         // max mode
+    std::vector<CandidateSummary> candidates;                      // max mode
 };
 
 struct GenResult {
@@ -228,6 +243,17 @@ GenResult generate_balanced(const std::string& brief,
                             algoforge::llm::LLMProvider& provider,
                             int seed = 42,
                             const std::string& model = "qwen2.5:32b");
+
+/* N-candidate ensemble: generate n candidates, score (sharpe), critique the top 2,
+ * return the best revised manifest. reasoning_provider=nullptr falls back to the main
+ * provider with a recorded warning. (Quick-backtest scoring degrades to 0 when no
+ * canonical bars are available — matching the Python graceful-degradation path.) */
+GenResult generate_max(const std::string& brief,
+                       algoforge::llm::LLMProvider& provider,
+                       int seed = 42,
+                       int n_candidates = 5,
+                       algoforge::llm::LLMProvider* reasoning_provider = nullptr,
+                       const std::string& model = "o3-mini");
 
 } /* namespace generator */
 } /* namespace algoforge::algo_gen */

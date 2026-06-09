@@ -161,4 +161,43 @@ void test_generator(TestRunner T) {
         CHK(!r.manifest.name.empty());
         CHK((int)r.manifest.indicators.size() >= 1);
     });
+
+    section("generate_max — N-candidate ensemble");
+    auto many = [](int n){ return std::vector<std::string>(n, VALID_MANIFEST); };  /* enough valid turns */
+    T("returns_manifest", [&]{
+        MockProvider p(many(10));
+        auto r = generator::generate_max("breakout", p, 42, 5);
+        CHK(!r.manifest.name.empty());
+    });
+    T("trace_lists_5_candidates", [&]{
+        MockProvider p(many(10));
+        auto r = generator::generate_max("breakout", p, 42, 5);
+        CHK_EQ((int)r.trace.candidates.size(), 5);
+    });
+    T("trace_mode_is_max", [&]{
+        MockProvider p(many(10));
+        auto r = generator::generate_max("breakout", p, 42, 5);
+        CHK(r.trace.mode == "max");
+    });
+    T("reasoning_provider_none_warns", [&]{
+        MockProvider p(many(10));
+        auto r = generator::generate_max("breakout", p, 42, 5);
+        CHK((int)r.trace.warnings.size() >= 1);
+        bool found = false; for (auto& w : r.trace.warnings) if (w.find("reasoning_provider") != std::string::npos) found = true;
+        CHK(found);
+    });
+    T("candidates_indexes_0_to_4", [&]{
+        MockProvider p(many(10));
+        auto r = generator::generate_max("breakout", p, 42, 5);
+        for (int i = 0; i < 5; ++i) CHK_EQ(r.trace.candidates[i].index, i);
+    });
+    T("explicit_reasoning_provider_no_warning", [&]{
+        MockProvider main_p(many(2));            /* unused when reasoning provider supplied */
+        MockProvider reasoning_p(many(10));
+        auto r = generator::generate_max("breakout", main_p, 42, 5, &reasoning_p, "o3-mini");
+        CHK(!r.manifest.name.empty());
+        CHK(r.trace.reasoning_model == "o3-mini");
+        bool fellback = false; for (auto& w : r.trace.warnings) if (w.find("reasoning_provider=None") != std::string::npos) fellback = true;
+        CHK(!fellback);
+    });
 }
