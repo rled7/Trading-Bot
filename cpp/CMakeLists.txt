@@ -155,6 +155,7 @@ add_test(NAME LLMTests COMMAND test_llm
 set(ALGO_GEN_SOURCES
   src/algo_gen/dsl.cpp
   src/algo_gen/json_helpers.cpp
+  src/algo_gen/prompts.cpp
   src/algo_gen/promote.cpp
   src/algo_gen/robustness.cpp
   src/algo_gen/runtime.cpp
@@ -239,5 +240,14 @@ target_include_directories(test_coinbase_broker PRIVATE include tests src/llm)
 target_link_libraries(test_coinbase_broker PRIVATE af_engine af_llm)
 set_target_properties(test_coinbase_broker PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME CoinbaseBrokerTests COMMAND test_coinbase_broker)
+
+# ── algo_gen prompts test suite (Phase 2, standalone) ──
+add_executable(test_prompts
+  tests/test_prompts_main.cpp
+  tests/test_prompts.cpp)
+target_include_directories(test_prompts PRIVATE include tests src src/algo_gen)
+target_link_libraries(test_prompts PRIVATE af_algo_gen)
+set_target_properties(test_prompts PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME PromptsTests COMMAND test_prompts)
 
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")

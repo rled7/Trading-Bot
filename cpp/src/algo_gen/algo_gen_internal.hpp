@@ -159,4 +159,29 @@ inline bool passes_gate(const SimpleBacktestResult& r) {
     return true;
 }
 
+/* =========================================================================
+ * Prompts — S1 generator templates + robust JSON extraction.
+ * Python oracle: python/algoforge/algo_gen/prompts.py
+ * ========================================================================= */
+namespace prompts {
+
+/* Robustly pull the first JSON object out of an LLM response:
+ *   1) prefer a ```json ... ``` (or bare ```) fenced block,
+ *   2) else scan for the first balanced { ... } object.
+ * Throws std::runtime_error ("No valid JSON ...") if none parses. */
+json::JsonValue extract_json_block(const std::string& text);
+
+std::string render_fast_user(const std::string& brief);
+std::string render_balanced_user(const std::string& brief);
+std::string render_balanced_critique(const json::JsonValue& manifest);
+std::string render_max_user(const std::string& brief, int candidate_num, int n_candidates,
+                            const std::string& context_hint = "momentum, mean-reversion, or volatility breakout");
+std::string render_max_critique(const json::JsonValue& manifest, int trades, double sharpe, double max_dd);
+
+extern const char* FAST_SYSTEM;
+extern const char* BALANCED_SYSTEM;
+extern const char* MAX_SYSTEM;
+
+} /* namespace prompts */
+
 } /* namespace algoforge::algo_gen */
