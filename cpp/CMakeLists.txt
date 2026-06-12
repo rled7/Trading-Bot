@@ -71,6 +71,8 @@ set(CPP_SOURCES
   src/backtesting/backtest_engine.cpp
   src/execution/signal_processor.cpp
   src/monitoring/logger.cpp
+  src/monitoring/telegram.cpp
+  src/monitoring/health.cpp
   src/learning/error_registry.cpp
   src/learning/learned_block_store.cpp
 )
@@ -309,5 +311,18 @@ target_include_directories(af_dashboard_server PRIVATE include third_party/httpl
 target_link_libraries(af_dashboard_server PRIVATE af_dashboard af_engine)
 set_target_properties(af_dashboard_server PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 target_compile_definitions(af_dashboard_server PRIVATE AF_VERSION="${PROJECT_VERSION}")
+
+# ── Monitoring parity tests (telegram + health; both live in af_engine) ──
+add_executable(test_telegram tests/test_telegram.cpp)
+target_include_directories(test_telegram PRIVATE include tests)
+target_link_libraries(test_telegram PRIVATE af_engine)
+set_target_properties(test_telegram PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME TelegramTests COMMAND test_telegram)
+
+add_executable(test_health tests/test_health.cpp)
+target_include_directories(test_health PRIVATE include tests)
+target_link_libraries(test_health PRIVATE af_engine)
+set_target_properties(test_health PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME HealthTests COMMAND test_health)
 
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")

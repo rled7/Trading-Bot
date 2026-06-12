@@ -11,7 +11,7 @@ implementations). For bug-level detail on the original C/C++ port see
 
 Branch `cpp-port-phase1` → merged to `main`. The C++ implementation (`cpp/`) was brought
 from the reference core up to feature parity with the Python bot. Full **ctest suite:
-14/14 green** (cmake Release build verified).
+16/16 green** (cmake Release build verified).
 
 ### Phase 1 — REST broker layer
 Ported every REST broker adapter from its Python oracle, each with a C++ parity test:
@@ -54,7 +54,7 @@ belongs to Phase 5).
     Python `_STORE`). 503 `algo_gen_disabled` on all routes when the service is unconfigured.
   - Slice 6 — `af_dashboard_server` binary: constructs `ServerDeps` (PaperBroker + optional
     OllamaProvider/AlgoGenService) and runs `httplib::Server`. The routes now actually serve.
-- **Full suite green: `ctest` 14/14, `af_tests` 102/102.** (The SQLite-journal /
+- **Full suite green: `ctest` 16/16, `af_tests` 102/102.** (The SQLite-journal /
   LearnedBlockStore / CSV-fixture cases write DB + temp files, so they only "fail" when run
   inside a sandbox that blocks those writes — not a code defect; they pass with write access.)
 
@@ -71,12 +71,27 @@ belongs to Phase 5).
 > separate `{validation, tier}` into the unified `TierReport`; `/generate/stream` emits no
 > separate `validation` stage; absent manifest Optionals are omitted, not `null`.
 
+### Monitoring / ops parity (R11)
+- Ported the two remaining flat Python modules that had no C++ counterpart, found by diffing
+  `python/algoforge/` against `cpp/src/`:
+  - **`monitoring/telegram.cpp`** — `TelegramAlerter` (Bot API `sendMessage`): `send` +
+    `alert` / `alert_guard_state` / `alert_trade`, env-credential gated (`TELEGRAM_TOKEN` /
+    `TELEGRAM_CHAT_ID`), silently disabled without creds. The HTTP POST is an injectable
+    boundary (default libcurl under `AF_HAS_LIBCURL`); message formatting is parity-tested.
+  - **`monitoring/health.cpp`** — `HealthMonitor` / `HealthSnapshot` with the exact Python
+    status thresholds (RED→CRITICAL, YELLOW or >3% daily loss→WARN, else OK) + `to_json`.
+- **Module parity verified by diff:** every `python/algoforge` subpackage (algo_gen, analytics,
+  brokers→broker, dashboard, llm) and every flat module (indicators, patterns, risk, analysis,
+  backtest, broker/paper/mt5, algorithm(s), types, logger, telegram, health) now has a dedicated
+  C++ counterpart. New suites: `TelegramTests`, `HealthTests`. **`ctest` 16/16.**
+
 ### Still open (decisions / hard blocks only)
 - **MT5 connector** — hard-blocked: needs the proprietary Windows MetaTrader5 DLL.
   Stays a WIN32-only stub on macOS/Linux.
 - **Phase 6 (decision)** — whether to flip production over to the C++ build and retire Python
   (or keep Python as the reference oracle). The C++ port is now feature-complete to parity
-  (engine, brokers, algo_gen, S6, and a served dashboard), so this is purely a go/no-go call.
+  (engine, brokers, algo_gen, S6, served dashboard, and the monitoring/ops layer — verified by
+  module diff), so this is purely a go/no-go call.
 - **Live LLM/algo_gen demo (optional)** — running `af_dashboard_server --llm-host …` against a
   real Ollama instance to exercise `/api/algos` end-to-end is environment-gated (needs Ollama),
   not a code task.

@@ -20,9 +20,8 @@ High-performance reimplementation of the AlgoForge autonomous trading bot in C17
 git clone <repo>
 cd algoforge_cpp
 
-# 2. Get SQLite3 (required for database persistence)
-# Download from https://sqlite.org/download.html
-# Copy sqlite3.c and sqlite3.h into third_party/sqlite3/
+# 2. SQLite3 is bundled in third_party/sqlite3/ (sqlite3.c + sqlite3.h) — no download needed.
+#    (Only if vendoring fresh: fetch the amalgamation from https://sqlite.org/download.html.)
 
 # 3. Build (Release)
 chmod +x scripts/build.sh
@@ -54,7 +53,7 @@ cp ../../algoforge.ini.example algoforge.ini
 | C compiler | GCC 12 / Clang 15 / MSVC 2022 |
 | C++ compiler | C++20 support required |
 | Internet | Required for first build (CMake fetches nlohmann/json + spdlog) |
-| SQLite3 | Download manually (see above) |
+| SQLite3 | Bundled in `third_party/sqlite3/` (no action needed) |
 
 ### Windows (Visual Studio)
 ```bat
