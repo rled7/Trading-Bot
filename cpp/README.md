@@ -5,9 +5,11 @@ High-performance reimplementation of the AlgoForge autonomous trading bot in C17
 
 > 📋 Project history lives in the **[top-level CHANGELOG](../CHANGELOG.md)**. As of 2026-06
 > this reference port also has the REST broker layer, algorithm generation, the S6 discovery
-> daemon, and a C++ web dashboard at **full route parity** with the Python oracle — broker,
-> LLM, tick-stream, log, and the `/api/algos` generate/backtest/promote/retire group
-> (DashboardTests green). See the CHANGELOG for the documented C++/Python divergences.
+> daemon, and a C++ web dashboard that **ports every `server.py` route** — broker, LLM,
+> tick-stream, log, and the `/api/algos` generate/backtest/promote/retire group
+> (DashboardTests green). The dashboard is a **library factory** (like Python's `make_app`);
+> no serving binary instantiates it yet — wiring it in is a Phase-6 user decision. See the
+> CHANGELOG for the documented C++/Python divergences.
 
 ---
 
@@ -227,5 +229,5 @@ All benchmarks on same machine, same data, same logic:
 | MT5 Live | ✅ Windows | 🚧 Planned |
 | LearningEngine | ✅ Full | 🚧 Partial (registry only) |
 | StrategyGenerator | ✅ Full | 🚧 Planned |
-| Web dashboard | ✅ Full | ✅ Full (broker/LLM/tick/log + `/api/algos` group) |
+| Web dashboard | ✅ Full | ✅ All routes ported (library; not yet wired into a serving binary) |
 | SQLite persistence | ✅ Full | 🚧 Stub (needs amalgamation) |

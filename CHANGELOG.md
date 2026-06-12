@@ -56,10 +56,16 @@ belongs to Phase 5).
   4 known-failing cases unrelated to the dashboard — the SQLite persistence stub and the
   CSV-fixture loader both need the manually-added `sqlite3.c` amalgamation (see README).
 
-> **Dashboard route parity with `server.py` is now complete.** Documented divergences:
-> the C++ `/generate` response folds Python's separate `{validation, tier}` into the unified
-> `TierReport`; absent manifest Optionals are omitted (not `null`); LLM-driven `/generate`
-> needs a live provider + canonical bars wired into `AlgoGenService` at process start.
+> **All `server.py` routes are now ported.** Scope/wording honesty:
+> - `af_dashboard` is a **library factory** (the analogue of Python's `make_app`); like
+>   slices 1–4, the httplib socket layer is untested-by-design and **no serving binary yet
+>   instantiates it** — the production `algoforge` binary links `af_engine` only. Wiring the
+>   dashboard (and an `AlgoGenService` with a live LLM provider + canonical bars) into a
+>   running process is a Phase-6-shaped **user decision**, not unfinished scope. Until then
+>   the routes are correct-but-dormant.
+> - Documented behavioural divergences from Python: the C++ `/generate` response folds
+>   Python's separate `{validation, tier}` into the unified `TierReport`; `/generate/stream`
+>   emits no separate `validation` stage; absent manifest Optionals are omitted, not `null`.
 
 ### Still open (decisions, not blockers)
 - **MT5 connector** — hard-blocked: needs the proprietary Windows MetaTrader5 DLL.
