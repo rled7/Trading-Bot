@@ -47,18 +47,21 @@ belongs to Phase 5).
   - Slice 2 — broker-backed `/api/account`, `/api/positions`, `/api/orders`, `/api/bars/{symbol}`.
   - Slice 3 — `/api/llm/health`, `/api/llm/models`, `/api/llm/chat`, `/api/llm/chat/stream`.
   - Slice 4 — `/api/stream/ticks` (broker tick SSE; `tick_json` + interval clamp + symbol parse).
+  - Slice 5 — the full `/api/algos` group: GET list, POST `/generate`, POST `/generate/stream`
+    (SSE staged prompt→manifest→tier→[DONE]), POST `/{id}/backtest`, GET `/{id}/manifest`,
+    POST `/{id}/promote`, POST `/{id}/retire`. Backed by the new public `AlgoGenService`
+    facade + `manifest_to_json` serialiser + a thread-safe in-memory `AlgoStore` (mirrors the
+    Python `_STORE`). 503 `algo_gen_disabled` on all routes when the service is unconfigured.
 - **DashboardTests green** (the dashboard parity suite). Note the full `af_tests` suite has
   4 known-failing cases unrelated to the dashboard — the SQLite persistence stub and the
   CSV-fixture loader both need the manually-added `sqlite3.c` amalgamation (see README).
 
+> **Dashboard route parity with `server.py` is now complete.** Documented divergences:
+> the C++ `/generate` response folds Python's separate `{validation, tier}` into the unified
+> `TierReport`; absent manifest Optionals are omitted (not `null`); LLM-driven `/generate`
+> needs a live provider + canonical bars wired into `AlgoGenService` at process start.
+
 ### Still open (decisions, not blockers)
-- **`/api/algos/*` over HTTP** — the only unported dashboard route group (generate /
-  generate-stream / list / `{id}`/backtest|manifest|promote|retire). The C++ *compute* all
-  exists (`generator::generate_*`, `validate`, `run_manifest_backtest`, `promote`), so this
-  is purely an HTTP-exposure + manifest→JSON-serialisation task — and the speed win lives in
-  the compute, not the I/O layer. **Decision: is full algo_gen-over-HTTP parity worth the
-  net-new, parity-sensitive serialisation, or is the C++ dashboard "done" at its current
-  broker/LLM/tick/log surface?**
 - **MT5 connector** — hard-blocked: needs the proprietary Windows MetaTrader5 DLL.
   Stays a WIN32-only stub on macOS/Linux.
 - Phase 6 — whether to flip production over to the C++ build and retire Python (or keep
