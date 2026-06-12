@@ -51,7 +51,10 @@ static std::string utc_now_iso8601() {
  * Used by promote to write the registry file.
  * ========================================================================= */
 
-static std::string manifest_to_json(const AlgoManifest& m) {
+// Open-object fragment (NO outer '}') so promote() can append _metadata before
+// closing the object. The complete-object serialiser is algo_gen::manifest_to_json
+// (serialise.cpp), used by the dashboard.
+static std::string manifest_fragment_json(const AlgoManifest& m) {
     using namespace json;
     std::ostringstream o;
     o << "{\n";
@@ -212,7 +215,7 @@ void promote(const TierReport& report,
     meta << "  }\n";
 
     // Compose full JSON: manifest body + _metadata
-    std::string body = manifest_to_json(manifest);
+    std::string body = manifest_fragment_json(manifest);
 
     std::ofstream f(manifest_path);
     if (!f.is_open()) {

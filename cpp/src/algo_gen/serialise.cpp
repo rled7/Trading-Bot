@@ -77,6 +77,105 @@ std::string tier_report_to_json(const TierReport& r) {
 }
 
 /* =========================================================================
+ * manifest_to_json  (registry / dashboard manifest shape)
+ * ========================================================================= */
+
+std::string manifest_to_json(const AlgoManifest& m) {
+    using namespace json;
+    std::ostringstream o;
+    o << "{\n";
+    o << "  \"schema_version\": " << emit_string_val(m.schema_version) << ",\n";
+    o << "  \"name\": "           << emit_string_val(m.name)           << ",\n";
+    o << "  \"description\": "    << emit_string_val(m.description)    << ",\n";
+    o << "  \"rationale\": "      << emit_string_val(m.rationale)      << ",\n";
+
+    // timeframes
+    o << "  \"timeframes\": [";
+    for (size_t i = 0; i < m.timeframes.size(); ++i) {
+        if (i) o << ", ";
+        o << emit_string_val(m.timeframes[i]);
+    }
+    o << "],\n";
+
+    // symbols — either the string "any" or a list of symbols
+    o << "  \"symbols\": ";
+    if (std::holds_alternative<std::string>(m.symbols)) {
+        o << emit_string_val(std::get<std::string>(m.symbols));
+    } else {
+        const auto& syms = std::get<std::vector<std::string>>(m.symbols);
+        o << "[";
+        for (size_t i = 0; i < syms.size(); ++i) {
+            if (i) o << ", ";
+            o << emit_string_val(syms[i]);
+        }
+        o << "]";
+    }
+    o << ",\n";
+
+    // indicators
+    o << "  \"indicators\": [\n";
+    for (size_t i = 0; i < m.indicators.size(); ++i) {
+        const auto& ind = m.indicators[i];
+        o << "    {\"id\": " << emit_string_val(ind.id)
+          << ", \"kind\": "   << emit_string_val(ind.kind)
+          << ", \"params\": {";
+        bool first_p = true;
+        for (const auto& [k, v] : ind.params) {
+            if (!first_p) o << ", ";
+            o << emit_string_val(k) << ": " << emit_double(v);
+            first_p = false;
+        }
+        o << "}}";
+        if (i + 1 < m.indicators.size()) o << ",";
+        o << "\n";
+    }
+    o << "  ],\n";
+
+    // entries
+    o << "  \"entries\": [\n";
+    for (size_t i = 0; i < m.entries.size(); ++i) {
+        const auto& e = m.entries[i];
+        o << "    {\"side\": " << emit_string_val(e.side)
+          << ", \"when\": "     << emit_string_val(e.when) << "}";
+        if (i + 1 < m.entries.size()) o << ",";
+        o << "\n";
+    }
+    o << "  ],\n";
+
+    // exits — absent Optionals omitted (documented divergence from asdict null)
+    o << "  \"exits\": [\n";
+    for (size_t i = 0; i < m.exits.size(); ++i) {
+        const auto& x = m.exits[i];
+        o << "    {\"side\": " << emit_string_val(x.side);
+        if (x.when)   o << ", \"when\": "   << emit_string_val(*x.when);
+        if (x.sl_atr) o << ", \"sl_atr\": " << emit_double(*x.sl_atr);
+        if (x.tp_atr) o << ", \"tp_atr\": " << emit_double(*x.tp_atr);
+        o << "}";
+        if (i + 1 < m.exits.size()) o << ",";
+        o << "\n";
+    }
+    o << "  ],\n";
+
+    // risk
+    o << "  \"risk\": {\n";
+    o << "    \"size\": "           << emit_string_val(m.risk.size)       << ",\n";
+    o << "    \"atr_mult\": "       << emit_double(m.risk.atr_mult)       << ",\n";
+    o << "    \"fixed_lots\": "     << emit_double(m.risk.fixed_lots)     << ",\n";
+    o << "    \"max_concurrent\": " << m.risk.max_concurrent              << ",\n";
+    o << "    \"hedge\": "          << emit_bool(m.risk.hedge)            << ",\n";
+    o << "    \"cool_down_bars\": " << m.risk.cool_down_bars              << "\n";
+    o << "  }";
+
+    // code (escape-hatch) — only when present
+    if (m.code) {
+        o << ",\n  \"code\": " << emit_string_val(*m.code);
+    }
+
+    o << "\n}";
+    return o.str();
+}
+
+/* =========================================================================
  * tier_report_from_json
  * ========================================================================= */
 

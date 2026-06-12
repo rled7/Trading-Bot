@@ -172,6 +172,17 @@ Tier score_to_tier(double wf, double mc, double robustness) noexcept;
 std::string   tier_report_to_json(const TierReport& r);
 TierReport    tier_report_from_json(const std::string& json);
 
+/**
+ * Serialise an AlgoManifest to JSON (the registry / dashboard manifest shape:
+ * schema_version, name, description, rationale, timeframes, symbols, indicators,
+ * entries, exits, risk, and code when present).
+ *
+ * Mirrors Python `dataclasses.asdict(manifest)` with one deliberate divergence:
+ * absent Optional fields (exit when/sl_atr/tp_atr, code) are OMITTED rather than
+ * emitted as null — matching the existing dashboard handler serialisation convention.
+ */
+std::string   manifest_to_json(const AlgoManifest& m);
+
 /* =========================================================================
  * §7  Registry promotion
  * ========================================================================= */

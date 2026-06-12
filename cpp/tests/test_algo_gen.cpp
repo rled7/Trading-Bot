@@ -419,6 +419,41 @@ void test_algo_gen(TestRunner T) {
         CHK(r.stages[2].metrics.count("score") > 0);
     });
 
+    section("JSON: manifest_to_json (dashboard manifest shape)");
+
+    T("manifest_to_json: emits a complete, re-parseable object", [](){
+        auto m    = parse_manifest(minimal_manifest("trend-rider"));
+        auto json = manifest_to_json(m);
+        // complete object: balanced outer braces
+        CHK(json.front() == '{');
+        CHK(json.back()  == '}');
+        // round-trips back through parse_manifest without throwing
+        auto m2 = parse_manifest(json);
+        CHK(m2.name           == m.name);
+        CHK(m2.schema_version == m.schema_version);
+        CHK(m2.indicators.size() == m.indicators.size());
+        CHK(m2.entries.size()    == m.entries.size());
+        CHK(m2.exits.size()      == m.exits.size());
+    });
+
+    T("manifest_to_json: includes core fields + risk block", [](){
+        auto m    = parse_manifest(minimal_manifest("my-algo"));
+        auto json = manifest_to_json(m);
+        CHK(json.find("\"name\": \"my-algo\"")   != std::string::npos);
+        CHK(json.find("\"schema_version\":")     != std::string::npos);
+        CHK(json.find("\"indicators\":")         != std::string::npos);
+        CHK(json.find("\"entries\":")            != std::string::npos);
+        CHK(json.find("\"risk\":")               != std::string::npos);
+        CHK(json.find("\"max_concurrent\":")     != std::string::npos);
+    });
+
+    T("manifest_to_json: omits absent code field (no escape-hatch)", [](){
+        auto m    = parse_manifest(minimal_manifest());
+        auto json = manifest_to_json(m);
+        CHK(m.code.has_value() == false);
+        CHK(json.find("\"code\":") == std::string::npos);
+    });
+
     /* ---- Section 4: Validate pipeline (schema stage only, fast) ---- */
     section("Validate: stage 1 schema lint");
 
