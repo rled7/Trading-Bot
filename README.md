@@ -15,6 +15,11 @@ Each project is fully self-contained: its own build entry point, its own
 tests, its own README. They share the blueprint (architecture, pattern
 registry, risk rules) but no code.
 
+📋 **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md) — the canonical, top-level history
+for all four projects (no digging through subfolders). The `cpp/` reference is the most
+complete: as of 2026-06 it has the REST broker layer, algorithm generation, the S6
+discovery daemon, and a C++ web dashboard ported to parity with Python (ctest 14/14).
+
 ## Build & test quick-reference
 
 | Project   | Test command                                                        | Bench command                          |

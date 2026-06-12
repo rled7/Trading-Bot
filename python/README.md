@@ -2,6 +2,8 @@
 
 Python 3.11+ implementation of the AlgoForge blueprint.
 
+> 📋 Project history: see the **[top-level CHANGELOG](../CHANGELOG.md)**.
+
 **Status:** Rounds 1–6 complete. Indicators, pattern engine (candlestick +
 chart + harmonic), broker ABC, and paper broker all implemented and matching
 the C++ reference.

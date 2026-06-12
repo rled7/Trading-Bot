@@ -2,6 +2,8 @@
 
 Pure C17 implementation of the AlgoForge blueprint.
 
+> 📋 Project history: see the **[top-level CHANGELOG](../CHANGELOG.md)**.
+
 **Status:** Rounds 1–6 complete. Indicators, pattern engine (candlestick +
 chart + harmonic), broker abstraction, and paper broker all implemented and
 matching the C++ reference.

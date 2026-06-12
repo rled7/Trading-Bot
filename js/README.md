@@ -3,6 +3,8 @@
 Node.js 18+ implementation of the AlgoForge blueprint. CommonJS modules,
 zero runtime dependencies for core logic.
 
+> 📋 Project history: see the **[top-level CHANGELOG](../CHANGELOG.md)**.
+
 **Status:** Rounds 1–6 complete. Indicators, pattern engine (candlestick +
 chart + harmonic), broker interface, and paper broker all implemented and
 matching the C++ reference.

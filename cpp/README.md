@@ -3,6 +3,10 @@
 High-performance reimplementation of the AlgoForge autonomous trading bot in C17 + C++20.
 **40–60× faster** than the Python version. Same logic, same patterns, same error guards.
 
+> 📋 Project history lives in the **[top-level CHANGELOG](../CHANGELOG.md)**. As of 2026-06
+> this reference port also has the REST broker layer, algorithm generation, the S6 discovery
+> daemon, and a C++ web dashboard at parity with Python (ctest 14/14).
+
 ---
 
 ## Quick Start

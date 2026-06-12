@@ -1,5 +1,8 @@
 # AlgoForge C/C++ Port — Changelog
 
+> 📋 The **canonical, top-level changelog** is [`../CHANGELOG.md`](../CHANGELOG.md). This
+> file keeps the bug-level detail of the original 2026-03 C/C++ reference port.
+
 ## BUILD-CPP-001 — Initial Port
 **Date:** 2026-03-31
 
