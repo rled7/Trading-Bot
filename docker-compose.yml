@@ -1,6 +1,33 @@
-version: "3.9"
+# Phase 6 (2026-06-12): production flipped to the C++ build.
+# `docker compose up` starts the C++ engine + dashboard only.
+# The Python/JS/C implementations remain as reference oracles behind profiles:
+#   docker compose --profile oracle up algoforge-python
 services:
+  algoforge-cpp:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpp-lang
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+    restart: unless-stopped
+    volumes:
+      - ./logs/cpp:/app/logs
+
+  algoforge-cpp-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpp-lang
+    command: ["./af_dashboard_server", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "${AF_DASHBOARD_PORT:-8000}:8000"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    restart: unless-stopped
+
   algoforge-python:
+    profiles: ["oracle"]
     build:
       context: .
       dockerfile: Dockerfile.python
@@ -13,6 +40,7 @@ services:
       - ./logs/python:/app/logs
 
   algoforge-js:
+    profiles: ["oracle"]
     build:
       context: .
       dockerfile: Dockerfile.js
@@ -25,6 +53,7 @@ services:
       - ./logs/js:/app/logs
 
   algoforge-c:
+    profiles: ["oracle"]
     build:
       context: .
       dockerfile: Dockerfile.c-lang

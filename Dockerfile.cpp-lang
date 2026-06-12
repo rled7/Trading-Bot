@@ -1,0 +1,18 @@
+# AlgoForge — production image (C++ reference implementation, Phase 6).
+# Multi-stage: heavy toolchain in the builder, slim runtime with just the binaries.
+FROM ubuntu:22.04 AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    g++ cmake make ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY cpp/ ./cpp/
+RUN cmake -S cpp -B build -DCMAKE_BUILD_TYPE=Release \
+ && cmake --build build --target algoforge af_dashboard_server -j"$(nproc)"
+
+FROM ubuntu:22.04
+WORKDIR /app
+COPY --from=builder /src/build/algoforge /src/build/af_dashboard_server ./
+ENV LOG_LEVEL=info
+ENV TELEGRAM_TOKEN=""
+ENV TELEGRAM_CHAT_ID=""
+# Engine entry point (paper mode by default; --mode LIVE requires interactive confirm).
+CMD ["./algoforge"]

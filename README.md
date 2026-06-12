@@ -6,10 +6,16 @@ language, sharing one repo.
 ```
 .
 ├── c/        — C17, vtable broker, manual memory, MT5 DLL bridge for live trading
-├── cpp/      — C++20, reference implementation (most complete)
-├── python/   — Python 3.11+, native MetaTrader5 pkg for live trading
+├── cpp/      — C++20, ★ PRODUCTION implementation (Phase 6, 2026-06-12)
+├── python/   — Python 3.11+, reference oracle; native MetaTrader5 pkg for live trading
 └── js/       — Node.js 18+, MT5 via ffi for live trading
 ```
+
+**Production = C++** as of Phase 6 (2026-06-12): `docker compose up` builds and runs the
+C++ engine (`algoforge`) plus the C++ dashboard (`af_dashboard_server`, port 8000) from
+`Dockerfile.cpp-lang`. Python remains the parity oracle — its implementation and tests are
+unchanged and runnable behind the compose `oracle` profile
+(`docker compose --profile oracle up algoforge-python`).
 
 Each project is fully self-contained: its own build entry point, its own
 tests, its own README. They share the blueprint (architecture, pattern
@@ -18,7 +24,7 @@ registry, risk rules) but no code.
 📋 **Changelog:** [`CHANGELOG.md`](./CHANGELOG.md) — the canonical, top-level history
 for all four projects (no digging through subfolders). The `cpp/` reference is the most
 complete: as of 2026-06 it has the REST broker layer, algorithm generation, the S6
-discovery daemon, and a C++ web dashboard ported to parity with Python (ctest 14/14).
+discovery daemon, and a C++ web dashboard ported to parity with Python (ctest 16/16).
 
 ## Build & test quick-reference
 
@@ -74,7 +80,7 @@ the C++ reference to the three remaining languages (C, Python, JS).
 | Algorithm registry | ❌ | ✅ 5 algos | ❌ | ❌ |
 | Multi-TF confluence | ❌ | ⚠️ partial | ❌ | ❌ |
 | Risk & execution | ❌ | ⚠️ partial | ❌ | ❌ |
-| 24/7 ops (Docker/logs) | ❌ | ❌ | ❌ | ❌ |
+| 24/7 ops (Docker/logs) | ❌ | ✅ `Dockerfile.cpp-lang` | ❌ | ❌ |
 | Live MT5 connectivity | ❌ | ❌ | ❌ | ❌ |
 
 ### Round tracker

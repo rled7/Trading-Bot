@@ -85,13 +85,26 @@ belongs to Phase 5).
   backtest, broker/paper/mt5, algorithm(s), types, logger, telegram, health) now has a dedicated
   C++ counterpart. New suites: `TelegramTests`, `HealthTests`. **`ctest` 16/16.**
 
-### Still open (decisions / hard blocks only)
+### Phase 6 — production flipped to C++ (DECIDED 2026-06-12)
+User call: **production = the C++ build; Python stays as the reference oracle** (not retired).
+- **`Dockerfile.cpp-lang`** (new) — multi-stage prod image: ubuntu builder (g++/cmake, no
+  external deps beyond Threads — sqlite3 + httplib are vendored) → slim runtime with the
+  `algoforge` engine and `af_dashboard_server` binaries.
+- **`docker-compose.yml`** — `docker compose up` now starts **`algoforge-cpp`** (engine) +
+  **`algoforge-cpp-dashboard`** (port 8000). Python/JS/C demoted behind the `oracle` profile:
+  `docker compose --profile oracle up algoforge-python`. Obsolete `version:` key removed.
+- **README** — cpp marked ★ PRODUCTION; Python marked reference oracle; stale "ctest 14/14"
+  corrected to 16/16; 24/7-ops inventory row updated for C++.
+- Verified: `docker compose config` valid; both binaries build + pass natively (ctest 16/16).
+  The image build itself is environment-gated — no container runtime on this machine (docker
+  CLI present, no daemon backend). First `docker compose up` on a Docker-equipped host is the
+  remaining smoke test.
+
+### Still open (hard blocks / environment-gated only)
 - **MT5 connector** — hard-blocked: needs the proprietary Windows MetaTrader5 DLL.
   Stays a WIN32-only stub on macOS/Linux.
-- **Phase 6 (decision)** — whether to flip production over to the C++ build and retire Python
-  (or keep Python as the reference oracle). The C++ port is now feature-complete to parity
-  (engine, brokers, algo_gen, S6, served dashboard, and the monitoring/ops layer — verified by
-  module diff), so this is purely a go/no-go call.
+- **Prod image smoke test** — `docker compose up` on a host with a container runtime
+  (this machine has the docker CLI but no daemon backend).
 - **Live LLM/algo_gen demo (optional)** — running `af_dashboard_server --llm-host …` against a
   real Ollama instance to exercise `/api/algos` end-to-end is environment-gated (needs Ollama),
   not a code task.
