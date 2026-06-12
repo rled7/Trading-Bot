@@ -241,4 +241,85 @@ void test_dashboard(RawTestFn& T) {
         CHK_EQ(sse_data_line("hi"), std::string("data: hi\n\n"));
         CHK_EQ(sse_data_line("[DONE]"), std::string("data: [DONE]\n\n"));
     });
+
+    // ── Slice 5: algo_gen routes (dashboard/algo_gen_routes.py) ──
+    section("dashboard — /api/algos error status mapping");
+    T("maps AlgoGenError kinds to HTTP status", []{
+        CHK_EQ(algo_gen_error_status("timeout"), 504);
+        CHK_EQ(algo_gen_error_status("unreachable"), 502);
+        CHK_EQ(algo_gen_error_status("generation"), 422);
+        CHK_EQ(algo_gen_error_status("backtest"), 422);
+        CHK_EQ(algo_gen_error_status("not_found"), 404);
+        CHK_EQ(algo_gen_error_status("internal"), 500);
+        CHK_EQ(algo_gen_error_status("??"), 500);
+    });
+    T("error + disabled bodies", []{
+        CHK_EQ(algo_gen_error_json("timeout", "slow"),
+               std::string("{\"error\":\"timeout\",\"detail\":\"slow\"}"));
+        CHK(contains(algos_disabled_json(), "\"error\":\"algo_gen_disabled\""));
+    });
+
+    section("dashboard — GET /api/algos list item JSON");
+    T("emits id/name/tier/status; empty name+tier → null", []{
+        auto j = algo_list_item_json("abc", "trend-rider", "green", "generated");
+        CHK(contains(j, "\"id\":\"abc\""));
+        CHK(contains(j, "\"name\":\"trend-rider\""));
+        CHK(contains(j, "\"tier\":\"green\""));
+        CHK(contains(j, "\"status\":\"generated\""));
+        auto j2 = algo_list_item_json("xyz", "", "", "generated");
+        CHK(contains(j2, "\"name\":null"));
+        CHK(contains(j2, "\"tier\":null"));
+    });
+
+    section("dashboard — /api/algos/{id}/backtest summary JSON");
+    T("emits algo_id/symbol/equity_curve/metrics", []{
+        algoforge::algo_gen::BacktestSummary bt;
+        bt.total_trades = 21; bt.net_profit = 123.5; bt.sharpe = 1.4;
+        bt.max_drawdown_pct = 8.2; bt.equity_curve = {10000.0, 10050.0, 10123.5};
+        auto j = backtest_summary_json("id1", "EURUSD", bt);
+        CHK(contains(j, "\"algo_id\":\"id1\""));
+        CHK(contains(j, "\"symbol\":\"EURUSD\""));
+        CHK(contains(j, "\"equity_curve\":[10000,10050,10123.5]"));
+        CHK(contains(j, "\"total_trades\":21"));
+        CHK(contains(j, "\"sharpe\":1.4"));
+        CHK(contains(j, "\"max_drawdown_pct\":8.2"));
+    });
+
+    section("dashboard — POST /api/algos/generate response JSON");
+    T("wraps id + manifest + tier_report fragments", []{
+        auto j = generate_response_json("gid", "{\"name\":\"a\"}", "{\"passed\":true}");
+        CHK(contains(j, "\"id\":\"gid\""));
+        CHK(contains(j, "\"manifest\":{\"name\":\"a\"}"));
+        CHK(contains(j, "\"tier_report\":{\"passed\":true}"));
+    });
+
+    section("dashboard — /api/algos request body parsing");
+    T("parse_generate_request: brief required; effort/seed default", []{
+        std::string err;
+        GenerateReq g;
+        CHK_FALSE(parse_generate_request("{}", g, err));            // missing brief
+        CHK_FALSE(parse_generate_request("{\"brief\":\"\"}", g, err)); // empty brief
+        GenerateReq g2;
+        CHK(parse_generate_request("{\"brief\":\"trade EURUSD\"}", g2, err));
+        CHK_EQ(g2.brief, std::string("trade EURUSD"));
+        CHK_EQ(g2.effort, std::string("fast"));                    // default
+        CHK_EQ(g2.seed, 42);                                       // default
+        GenerateReq g3;
+        CHK(parse_generate_request("{\"brief\":\"x\",\"effort\":\"max\",\"seed\":7}", g3, err));
+        CHK_EQ(g3.effort, std::string("max"));
+        CHK_EQ(g3.seed, 7);
+    });
+    T("parse_backtest_request: empty body → defaults; fields override", []{
+        std::string err;
+        BacktestReq b;
+        CHK(parse_backtest_request("", b, err));                   // empty → defaults
+        CHK_EQ(b.symbol, std::string("EURUSD"));
+        CHK_EQ(b.bars, -1);
+        CHK_EQ(b.seed, 42);
+        BacktestReq b2;
+        CHK(parse_backtest_request("{\"symbol\":\"GBPUSD\",\"bars\":500,\"seed\":9}", b2, err));
+        CHK_EQ(b2.symbol, std::string("GBPUSD"));
+        CHK_EQ(b2.bars, 500);
+        CHK_EQ(b2.seed, 9);
+    });
 }

@@ -14,8 +14,9 @@
 #include <vector>
 
 #include "dashboard/log_buffer.hpp"
-#include "core/types.h"   // AF_AccountInfo, AF_Position, AF_Order, AF_Bar, AF_Timeframe
-#include "core/llm.hpp"   // HealthStatus, ModelInfo, ChatResponse, LLMErrorKind
+#include "core/types.h"     // AF_AccountInfo, AF_Position, AF_Order, AF_Bar, AF_Timeframe
+#include "core/llm.hpp"     // HealthStatus, ModelInfo, ChatResponse, LLMErrorKind
+#include "core/algo_gen.hpp" // BacktestSummary (for /api/algos serialisers)
 
 namespace algoforge::dashboard {
 
@@ -108,5 +109,51 @@ std::string sse_data_line(const std::string& payload);
 bool parse_chat_request(const std::string& body,
                         algoforge::llm::ChatRequest& out,
                         std::string& error_detail);
+
+// ── Slice 5: algo_gen routes (Python oracle: dashboard/algo_gen_routes.py) ──
+
+/** HTTP status for an AlgoGenError.kind (Python algo_gen route mapping; default 500). */
+int algo_gen_error_status(const std::string& kind);
+/** Error body → {"error": <kind>, "detail": <detail>}. */
+std::string algo_gen_error_json(const std::string& kind, const std::string& detail);
+/** Body returned by every /api/algos route when algo_gen is disabled. */
+std::string algos_disabled_json();
+
+/** One item of GET /api/algos → {"id","name","tier","status"}.
+ *  Empty name/tier are emitted as JSON null (mirrors Python None). */
+std::string algo_list_item_json(const std::string& id,
+                                const std::string& name,
+                                const std::string& tier,
+                                const std::string& status);
+
+/** POST /api/algos/{id}/backtest → {algo_id,symbol,equity_curve,metrics}. */
+std::string backtest_summary_json(const std::string& algo_id,
+                                  const std::string& symbol,
+                                  const algoforge::algo_gen::BacktestSummary& bt);
+
+/** POST /api/algos/generate → {id, manifest, tier_report}. The C++ port folds
+ *  Python's separate {validation, tier} into the unified TierReport (documented
+ *  divergence). manifest_json / tier_report_json are pre-serialised fragments. */
+std::string generate_response_json(const std::string& id,
+                                   const std::string& manifest_json,
+                                   const std::string& tier_report_json);
+
+/** Parsed POST /api/algos/generate body (Python GenerateBody). */
+struct GenerateReq {
+    std::string brief;
+    std::string effort = "fast";   ///< "fast" | "balanced" | "max"
+    int         seed   = 42;       ///< Python: None → 42 in the route
+};
+/** Parse a generate body. brief is required (→ false + detail); effort/seed default. */
+bool parse_generate_request(const std::string& body, GenerateReq& out, std::string& error_detail);
+
+/** Parsed POST /api/algos/{id}/backtest body (Python BacktestBody). */
+struct BacktestReq {
+    std::string symbol = "EURUSD";
+    int         bars   = -1;       ///< Python: None → all bars (sentinel -1)
+    int         seed   = 42;
+};
+/** Parse a backtest body. All fields optional; an empty body yields the defaults. */
+bool parse_backtest_request(const std::string& body, BacktestReq& out, std::string& error_detail);
 
 } // namespace algoforge::dashboard

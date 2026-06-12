@@ -301,4 +301,107 @@ bool parse_chat_request(const std::string& body,
     return true;
 }
 
+// ── Slice 5: algo_gen routes (dashboard/algo_gen_routes.py) ──
+
+int algo_gen_error_status(const std::string& kind) {
+    if (kind == "timeout")     return 504;
+    if (kind == "unreachable") return 502;
+    if (kind == "generation")  return 422;
+    if (kind == "backtest")    return 422;
+    if (kind == "not_found")   return 404;
+    return 500;  // "internal" + anything unknown
+}
+
+std::string algo_gen_error_json(const std::string& kind, const std::string& detail) {
+    return "{\"error\":\"" + json_escape(kind) + "\",\"detail\":\"" + json_escape(detail) + "\"}";
+}
+
+std::string algos_disabled_json() {
+    return "{\"error\":\"algo_gen_disabled\",\"detail\":\"algo_gen not configured\"}";
+}
+
+std::string algo_list_item_json(const std::string& id,
+                                const std::string& name,
+                                const std::string& tier,
+                                const std::string& status) {
+    std::ostringstream o;
+    o << "{\"id\":\"" << json_escape(id) << "\""
+      << ",\"name\":" << (name.empty() ? "null" : "\"" + json_escape(name) + "\"")
+      << ",\"tier\":" << (tier.empty() ? "null" : "\"" + json_escape(tier) + "\"")
+      << ",\"status\":\"" << json_escape(status) << "\"}";
+    return o.str();
+}
+
+std::string backtest_summary_json(const std::string& algo_id,
+                                  const std::string& symbol,
+                                  const algoforge::algo_gen::BacktestSummary& bt) {
+    std::ostringstream o;
+    o << "{\"algo_id\":\"" << json_escape(algo_id) << "\""
+      << ",\"symbol\":\"" << json_escape(symbol) << "\""
+      << ",\"equity_curve\":[";
+    for (size_t i = 0; i < bt.equity_curve.size(); ++i) {
+        if (i) o << ",";
+        o << num(bt.equity_curve[i]);
+    }
+    o << "],\"metrics\":{"
+      << "\"total_trades\":" << bt.total_trades
+      << ",\"net_profit\":" << num(bt.net_profit)
+      << ",\"sharpe\":" << num(bt.sharpe)
+      << ",\"max_drawdown_pct\":" << num(bt.max_drawdown_pct)
+      << "}}";
+    return o.str();
+}
+
+std::string generate_response_json(const std::string& id,
+                                   const std::string& manifest_json,
+                                   const std::string& tier_report_json) {
+    std::ostringstream o;
+    o << "{\"id\":\"" << json_escape(id) << "\""
+      << ",\"manifest\":" << manifest_json
+      << ",\"tier_report\":" << tier_report_json << "}";
+    return o.str();
+}
+
+bool parse_generate_request(const std::string& body, GenerateReq& out, std::string& error_detail) {
+    namespace json = algoforge::llm::json;
+    json::JsonValue root;
+    try {
+        root = json::parse(body);
+    } catch (const std::exception& e) {
+        error_detail = std::string("invalid JSON: ") + e.what();
+        return false;
+    }
+    if (!root.has("brief") || root.get("brief").type != json::JsonType::String ||
+        root.get("brief").as_str().empty()) {
+        error_detail = "brief is required";
+        return false;
+    }
+    out.brief = root.get("brief").as_str();
+    out.effort = (root.has("effort") && root.get("effort").type == json::JsonType::String)
+                     ? root.get("effort").as_str() : "fast";
+    if (root.has("seed") && root.get("seed").type == json::JsonType::Number)
+        out.seed = static_cast<int>(root.get("seed").as_int());
+    return true;
+}
+
+bool parse_backtest_request(const std::string& body, BacktestReq& out, std::string& error_detail) {
+    namespace json = algoforge::llm::json;
+    // An empty body is valid → all defaults (Python BacktestBody has no required fields).
+    if (body.empty()) return true;
+    json::JsonValue root;
+    try {
+        root = json::parse(body);
+    } catch (const std::exception& e) {
+        error_detail = std::string("invalid JSON: ") + e.what();
+        return false;
+    }
+    if (root.has("symbol") && root.get("symbol").type == json::JsonType::String)
+        out.symbol = root.get("symbol").as_str();
+    if (root.has("bars") && root.get("bars").type == json::JsonType::Number)
+        out.bars = static_cast<int>(root.get("bars").as_int());
+    if (root.has("seed") && root.get("seed").type == json::JsonType::Number)
+        out.seed = static_cast<int>(root.get("seed").as_int());
+    return true;
+}
+
 } // namespace algoforge::dashboard
