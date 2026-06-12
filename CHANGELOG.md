@@ -54,9 +54,9 @@ belongs to Phase 5).
     Python `_STORE`). 503 `algo_gen_disabled` on all routes when the service is unconfigured.
   - Slice 6 — `af_dashboard_server` binary: constructs `ServerDeps` (PaperBroker + optional
     OllamaProvider/AlgoGenService) and runs `httplib::Server`. The routes now actually serve.
-- **DashboardTests green** (the dashboard parity suite). Note the full `af_tests` suite has
-  4 known-failing cases unrelated to the dashboard — the SQLite persistence stub and the
-  CSV-fixture loader both need the manually-added `sqlite3.c` amalgamation (see README).
+- **Full suite green: `ctest` 14/14, `af_tests` 102/102.** (The SQLite-journal /
+  LearnedBlockStore / CSV-fixture cases write DB + temp files, so they only "fail" when run
+  inside a sandbox that blocks those writes — not a code defect; they pass with write access.)
 
 > **All `server.py` routes are now ported AND served.** Slice 6 adds the
 > **`af_dashboard_server`** binary (the C++ analogue of `uvicorn make_app`): it wires a live

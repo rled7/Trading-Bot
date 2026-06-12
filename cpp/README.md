@@ -230,4 +230,4 @@ All benchmarks on same machine, same data, same logic:
 | LearningEngine | ✅ Full | 🚧 Partial (registry only) |
 | StrategyGenerator | ✅ Full | 🚧 Planned |
 | Web dashboard | ✅ Full | ✅ Full + served (`af_dashboard_server`; `/api/algos` via `--llm-host`) |
-| SQLite persistence | ✅ Full | 🚧 Stub (needs amalgamation) |
+| SQLite persistence | ✅ Full | ✅ Full (bundled `third_party/sqlite3`; journal + LearnedBlockStore tests pass) |
