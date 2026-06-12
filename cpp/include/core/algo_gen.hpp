@@ -18,9 +18,14 @@
 #include <filesystem>
 #include <map>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
+
+// Forward declaration — the service takes LLMProvider by reference, so consumers
+// of this header don't need to pull in core/llm.hpp (service.cpp includes it).
+namespace algoforge::llm { class LLMProvider; }
 
 namespace algoforge::algo_gen {
 
@@ -199,5 +204,70 @@ void promote(const TierReport& report,
              const AlgoManifest& manifest,
              const std::filesystem::path& registry_dir,
              bool confirm = false);
+
+/* =========================================================================
+ * §8  AlgoGenService — high-level facade for the dashboard /api/algos routes
+ *
+ * Mirrors python/algoforge/dashboard/algo_gen_routes.py::AlgoGenFacade. Holds an
+ * LLM provider, a registry directory, and the canonical bars used for validation
+ * and backtesting. The dashboard wires its routes to this public surface only.
+ * ========================================================================= */
+
+/** Public, kind-tagged error so the dashboard can map failures → HTTP status
+ *  without touching the algo_gen internal headers. kind is one of:
+ *  "timeout" (→504) | "unreachable" (→502) | "generation" (→422) |
+ *  "backtest" (→422) | "not_found" (→404) | "internal" (→500). */
+struct AlgoGenError : std::runtime_error {
+    std::string kind;
+    AlgoGenError(std::string k, const std::string& msg)
+        : std::runtime_error(msg), kind(std::move(k)) {}
+};
+
+/** Public projection of the internal SimpleBacktestResult (mirrors the Python
+ *  facade's backtest() metrics dict + equity curve). */
+struct BacktestSummary {
+    int                 total_trades     = 0;
+    double              net_profit       = 0.0;
+    double              sharpe           = 0.0;
+    double              max_drawdown_pct = 0.0;
+    std::vector<double> equity_curve;
+};
+
+class AlgoGenService {
+public:
+    /**
+     * @param llm           Live LLM provider (Ollama/compatible) for generation.
+     * @param registry_dir  Directory where promoted manifests are written.
+     * @param bars          Canonical bars for validate()/backtest() (may be empty).
+     */
+    AlgoGenService(algoforge::llm::LLMProvider& llm,
+                   std::filesystem::path registry_dir,
+                   std::vector<Bar> bars);
+
+    /** effort ∈ {"fast","balanced","max"}. Throws AlgoGenError on generation failure. */
+    AlgoManifest    generate(const std::string& brief,
+                             const std::string& effort = "fast",
+                             uint64_t seed = 42);
+
+    /** Run the 5-stage validation pipeline against the canonical bars. */
+    TierReport      validate(const AlgoManifest& m, uint64_t seed = 42);
+
+    /** Paper backtest. n_bars < 0 uses all canonical bars. Throws AlgoGenError("backtest"). */
+    BacktestSummary backtest(const AlgoManifest& m,
+                             const std::string& symbol = "EURUSD",
+                             int n_bars = -1,
+                             uint64_t seed = 42);
+
+    /** Promote a passing manifest into the registry (confirm=true, as in Python). */
+    void            promote(const TierReport& report, const AlgoManifest& m);
+
+    /** Retire a manifest: set is_enabled=false in its registry file (no-op if absent). */
+    void            retire(const AlgoManifest& m);
+
+private:
+    algoforge::llm::LLMProvider& llm_;
+    std::filesystem::path        registry_dir_;
+    std::vector<Bar>             bars_;
+};
 
 } /* namespace algoforge::algo_gen */

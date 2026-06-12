@@ -162,13 +162,15 @@ set(ALGO_GEN_SOURCES
   src/algo_gen/runtime.cpp
   src/algo_gen/schema.cpp
   src/algo_gen/serialise.cpp
+  src/algo_gen/service.cpp
   src/algo_gen/tier.cpp
   src/algo_gen/validator.cpp
 )
 
 add_library(af_algo_gen STATIC ${ALGO_GEN_SOURCES})
 target_include_directories(af_algo_gen PUBLIC include PRIVATE src/algo_gen)
-target_link_libraries(af_algo_gen PUBLIC af_lib)
+# af_llm: generator.cpp + service.cpp drive the LLM provider for manifest generation.
+target_link_libraries(af_algo_gen PUBLIC af_lib af_llm)
 # indicators.c is already compiled into af_engine; for standalone use we add it directly
 target_sources(af_algo_gen PRIVATE src/indicators/indicators.c)
 set_target_properties(af_algo_gen PROPERTIES

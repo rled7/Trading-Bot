@@ -8,6 +8,7 @@
 
 #include "test_helpers.hpp"
 #include "core/algo_gen.hpp"
+#include "core/llm.hpp"
 
 #include <cmath>
 #include <filesystem>
@@ -17,6 +18,19 @@
 #include <vector>
 
 using namespace algoforge::algo_gen;
+
+/** Trivial LLM provider stub — the AlgoGenService glue tests below exercise paths
+ *  that never reach the provider (unknown effort, empty-bars backtest, validate,
+ *  retire no-op); the generation-success path is covered by GeneratorTests. */
+class StubProvider : public algoforge::llm::LLMProvider {
+public:
+    algoforge::llm::HealthStatus           health() override { return {}; }
+    std::vector<algoforge::llm::ModelInfo> list_models() override { return {}; }
+    algoforge::llm::CompletionResponse     complete(const algoforge::llm::CompletionRequest&) override { return {}; }
+    algoforge::llm::ChatResponse           chat(const algoforge::llm::ChatRequest&) override { return {}; }
+    std::vector<algoforge::llm::ChatChunk>  chat_stream(const algoforge::llm::ChatRequest&) override { return {}; }
+    algoforge::llm::EmbedResponse          embed(const algoforge::llm::EmbedRequest&) override { return {}; }
+};
 
 /* =========================================================================
  * Helpers
@@ -452,6 +466,63 @@ void test_algo_gen(TestRunner T) {
         auto json = manifest_to_json(m);
         CHK(m.code.has_value() == false);
         CHK(json.find("\"code\":") == std::string::npos);
+    });
+
+    section("Service: AlgoGenService facade (dashboard glue)");
+
+    T("service.generate: unknown effort throws AlgoGenError(generation)", [](){
+        StubProvider llm;
+        AlgoGenService svc(llm, std::filesystem::temp_directory_path() / "af_svc_test", {});
+        bool threw = false;
+        try {
+            svc.generate("trade EURUSD", "turbo", 42);
+        } catch (const AlgoGenError& e) {
+            threw = true;
+            CHK(e.kind == "generation");
+        }
+        CHK(threw);
+    });
+
+    T("service.backtest: empty bars throws AlgoGenError(backtest)", [](){
+        StubProvider llm;
+        AlgoGenService svc(llm, std::filesystem::temp_directory_path() / "af_svc_test", {});
+        auto m = parse_manifest(minimal_manifest());
+        bool threw = false;
+        try {
+            svc.backtest(m, "EURUSD", -1, 42);
+        } catch (const AlgoGenError& e) {
+            threw = true;
+            CHK(e.kind == "backtest");
+        }
+        CHK(threw);
+    });
+
+    T("service.validate: runs pipeline against canonical bars (no LLM use)", [](){
+        StubProvider llm;
+        AlgoGenService svc(llm, std::filesystem::temp_directory_path() / "af_svc_test",
+                           make_trending_bars(600));
+        auto m = parse_manifest(minimal_manifest());
+        auto report = svc.validate(m, 42);          // must not throw / not touch LLM
+        CHK(report.manifest_name == m.name);
+        CHK(report.stages.size() >= 1);             // at least the schema-lint stage ran
+    });
+
+    T("service.backtest: produces a summary over canonical bars", [](){
+        StubProvider llm;
+        AlgoGenService svc(llm, std::filesystem::temp_directory_path() / "af_svc_test",
+                           make_trending_bars(600));
+        auto m = parse_manifest(minimal_manifest());
+        auto bt = svc.backtest(m, "EURUSD", -1, 42);
+        CHK(bt.equity_curve.size() >= 1);
+        CHK(bt.total_trades >= 0);
+    });
+
+    T("service.retire: missing registry file is a no-op (no throw)", [](){
+        StubProvider llm;
+        AlgoGenService svc(llm, std::filesystem::temp_directory_path() / "af_svc_test_empty", {});
+        auto m = parse_manifest(minimal_manifest("never-promoted"));
+        svc.retire(m);                              // must not throw
+        CHK(true);
     });
 
     /* ---- Section 4: Validate pipeline (schema stage only, fast) ---- */
