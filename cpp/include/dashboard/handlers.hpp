@@ -67,6 +67,19 @@ std::vector<std::string> timeframe_names();
 /** Server clamp for /api/bars ?count=: max(1, min(count, 5000)). */
 int clamp_bar_count(int count);
 
+// ── Slice 4: tick stream (Python oracle: server.py stream_ticks) ──
+
+/** One SSE tick payload → {"symbol","bid","ask","time"} (Python json.dumps field set). */
+std::string tick_json(const AF_Tick& t);
+/** Server clamp for /api/stream/ticks ?interval=: max(0.1, min(interval, 10.0)). */
+double clamp_stream_interval(double interval);
+/**
+ * Resolve the ?symbols= CSV into a symbol list (mirrors server.py stream_ticks):
+ * comma-split, trimmed, empties dropped; if the result is empty, fall back to defaults.
+ */
+std::vector<std::string> parse_stream_symbols(const std::string& csv,
+                                              const std::vector<std::string>& defaults);
+
 // ── Slice 3: llm routes (Python oracle: server.py llm_health/models/chat[/stream]) ──
 
 /** HTTP status for an LLM error kind (Python _LLM_ERROR_STATUS; default 500). */

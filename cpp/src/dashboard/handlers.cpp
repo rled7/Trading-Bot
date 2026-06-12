@@ -147,6 +147,38 @@ std::string bar_json(const AF_Bar& b) {
     return o.str();
 }
 
+// ── Slice 4: tick stream (server.py stream_ticks) ──
+std::string tick_json(const AF_Tick& t) {
+    std::ostringstream o;
+    o << "{\"symbol\":\"" << cstr(t.symbol) << "\""
+      << ",\"bid\":" << num(t.bid)
+      << ",\"ask\":" << num(t.ask)
+      << ",\"time\":" << t.timestamp << "}";
+    return o.str();
+}
+
+double clamp_stream_interval(double interval) {
+    if (interval < 0.1) return 0.1;
+    if (interval > 10.0) return 10.0;
+    return interval;
+}
+
+std::vector<std::string> parse_stream_symbols(const std::string& csv,
+                                              const std::vector<std::string>& defaults) {
+    std::vector<std::string> out;
+    std::string cur;
+    auto flush = [&] {
+        size_t b = cur.find_first_not_of(" \t");
+        size_t e = cur.find_last_not_of(" \t");
+        if (b != std::string::npos) out.push_back(cur.substr(b, e - b + 1));
+        cur.clear();
+    };
+    for (char c : csv) { if (c == ',') flush(); else cur += c; }
+    flush();
+    if (out.empty()) return defaults;
+    return out;
+}
+
 namespace {
 template <class T, class F>
 std::string json_array(const std::vector<T>& xs, F one) {

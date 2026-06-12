@@ -15,11 +15,13 @@
 #include "broker/broker.hpp"
 #include "core/llm.hpp"
 
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <functional>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -95,6 +97,34 @@ void register_routes(httplib::Server& srv, ServerDeps deps) {
         deps.broker->get_bars(symbol.c_str(), tf_enum, count, bars.data(), &filled);
         bars.resize(filled > 0 ? static_cast<size_t>(filled) : 0);
         res.set_content(bars_json(bars), "application/json");
+    });
+
+    // ── Slice 4: broker tick SSE (server.py stream_ticks) ──
+    srv.Get("/api/stream/ticks", [deps](const httplib::Request& req, httplib::Response& res) {
+        const double interval = clamp_stream_interval(
+            req.has_param("interval") ? std::atof(req.get_param_value("interval").c_str()) : 1.0);
+        const std::string csv = req.has_param("symbols") ? req.get_param_value("symbols") : "";
+        const std::vector<std::string> syms = parse_stream_symbols(csv, deps.symbols);
+        const af::IBroker* broker = deps.broker;
+        res.set_chunked_content_provider(
+            "text/event-stream",
+            [broker, syms, interval](size_t, httplib::DataSink& sink) {
+                if (!broker) { sink.done(); return false; }
+                while (sink.is_writable()) {
+                    const std::string ka = ": keepalive\n\n";
+                    if (!sink.write(ka.data(), ka.size())) break;
+                    for (const auto& sym : syms) {
+                        AF_Tick t{};
+                        if (broker->get_tick(sym.c_str(), t) != AF_OK) continue;
+                        const std::string line = sse_data_line(tick_json(t));
+                        if (!sink.write(line.data(), line.size())) { sink.done(); return true; }
+                    }
+                    std::this_thread::sleep_for(
+                        std::chrono::duration<double>(interval));
+                }
+                sink.done();
+                return true;
+            });
     });
 
     // ── Slice 3: llm routes (server.py llm_health/models/chat[/stream]) ──

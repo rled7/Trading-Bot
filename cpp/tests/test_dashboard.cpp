@@ -155,6 +155,38 @@ void test_dashboard(RawTestFn& T) {
         CHK_EQ(clamp_bar_count(99999), 5000);
     });
 
+    // ── Slice 4: tick stream (server.py stream_ticks) ──
+    section("dashboard — /api/stream/ticks tick payload + clamps");
+    T("tick_json emits symbol/bid/ask/time (Python json.dumps field set)", []{
+        AF_Tick t{};
+        t.timestamp = 1700000000; t.bid = 1.1050; t.ask = 1.1052;
+        std::snprintf(t.symbol, sizeof t.symbol, "EURUSD");
+        auto j = tick_json(t);
+        CHK(contains(j, "\"symbol\":\"EURUSD\""));
+        CHK(contains(j, "\"bid\":1.105"));
+        CHK(contains(j, "\"ask\":1.1052"));
+        CHK(contains(j, "\"time\":1700000000"));
+        CHK_FALSE(contains(j, "volume"));   // Python payload omits volume
+    });
+    T("clamp_stream_interval clamps to [0.1, 10.0]", []{
+        CHK_EQ(clamp_stream_interval(0.0), 0.1);
+        CHK_EQ(clamp_stream_interval(-5.0), 0.1);
+        CHK_EQ(clamp_stream_interval(1.0), 1.0);
+        CHK_EQ(clamp_stream_interval(999.0), 10.0);
+    });
+    T("parse_stream_symbols splits/trims/falls back to defaults", []{
+        std::vector<std::string> def = {"EURUSD", "GBPUSD"};
+        CHK_EQ(parse_stream_symbols("", def), def);             // empty → defaults
+        CHK_EQ(parse_stream_symbols("   ", def), def);          // whitespace-only → defaults
+        auto two = parse_stream_symbols(" XAUUSD , USDJPY ", def);
+        CHK_EQ(two.size(), (size_t)2);
+        CHK_EQ(two[0], std::string("XAUUSD"));                  // trimmed
+        CHK_EQ(two[1], std::string("USDJPY"));
+        auto one = parse_stream_symbols("EURJPY,,", def);       // empties dropped
+        CHK_EQ(one.size(), (size_t)1);
+        CHK_EQ(one[0], std::string("EURJPY"));
+    });
+
     // ── Slice 3: llm routes ──
     using LK = algoforge::llm::LLMErrorKind;
     section("dashboard — llm error status mapping (_LLM_ERROR_STATUS)");

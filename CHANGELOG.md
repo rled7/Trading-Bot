@@ -39,13 +39,26 @@ belongs to Phase 5).
   injected generate/validate fns for determinism. 7-scenario golden oracle — **13/13**.
 
 ### Phase 5 — C++ web dashboard
-- Vendored header-only **cpp-httplib**. `af_dashboard` = parity-tested handlers
-  (health / symbols / logs JSON + clamp) + `log_buffer` (ports the Python LogRingBuffer
-  tail semantics) + thin httplib binding. **SSE proven**.
-- Slice 1 (handlers + log buffer + httplib) → slice 2 (broker-backed routes) → slice 3
-  (additional handlers, routes & tests). **DashboardTests green; full suite 14/14.**
+- Vendored header-only **cpp-httplib**. `af_dashboard` = parity-tested pure handlers
+  ((inputs) → JSON string) + a thin, untested-by-design httplib binding (`server.cpp`)
+  that only wires sockets to those handlers. **SSE proven** (chunked content provider).
+- Routes ported to parity with `python/algoforge/dashboard/server.py`:
+  - Slice 1 — `/` static, `/api/health`, `/api/symbols`, `/api/logs` (+ `LogRingBuffer`).
+  - Slice 2 — broker-backed `/api/account`, `/api/positions`, `/api/orders`, `/api/bars/{symbol}`.
+  - Slice 3 — `/api/llm/health`, `/api/llm/models`, `/api/llm/chat`, `/api/llm/chat/stream`.
+  - Slice 4 — `/api/stream/ticks` (broker tick SSE; `tick_json` + interval clamp + symbol parse).
+- **DashboardTests green** (the dashboard parity suite). Note the full `af_tests` suite has
+  4 known-failing cases unrelated to the dashboard — the SQLite persistence stub and the
+  CSV-fixture loader both need the manually-added `sqlite3.c` amalgamation (see README).
 
 ### Still open (decisions, not blockers)
+- **`/api/algos/*` over HTTP** — the only unported dashboard route group (generate /
+  generate-stream / list / `{id}`/backtest|manifest|promote|retire). The C++ *compute* all
+  exists (`generator::generate_*`, `validate`, `run_manifest_backtest`, `promote`), so this
+  is purely an HTTP-exposure + manifest→JSON-serialisation task — and the speed win lives in
+  the compute, not the I/O layer. **Decision: is full algo_gen-over-HTTP parity worth the
+  net-new, parity-sensitive serialisation, or is the C++ dashboard "done" at its current
+  broker/LLM/tick/log surface?**
 - **MT5 connector** — hard-blocked: needs the proprietary Windows MetaTrader5 DLL.
   Stays a WIN32-only stub on macOS/Linux.
 - Phase 6 — whether to flip production over to the C++ build and retire Python (or keep
