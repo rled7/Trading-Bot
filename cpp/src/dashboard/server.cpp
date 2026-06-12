@@ -13,6 +13,7 @@
 #include "dashboard/handlers.hpp"
 #include "dashboard/log_buffer.hpp"
 #include "broker/broker.hpp"
+#include "core/llm.hpp"
 
 #include <cstdlib>
 #include <fstream>
@@ -29,6 +30,8 @@ struct ServerDeps {
     std::vector<std::string>                          symbols;
     LogRingBuffer*                                    logs = nullptr;
     const af::IBroker*                                broker = nullptr;  // slice 2 data source
+    algoforge::llm::LLMProvider*                      llm = nullptr;     // slice 3 data source
+    std::string                                       llm_host;          // for /api/llm/health
     std::function<std::pair<std::string, bool>()>     broker_status;  // (name, connected)
     std::function<double()>                           uptime;
     std::string                                       static_dir;
@@ -92,6 +95,79 @@ void register_routes(httplib::Server& srv, ServerDeps deps) {
         deps.broker->get_bars(symbol.c_str(), tf_enum, count, bars.data(), &filled);
         bars.resize(filled > 0 ? static_cast<size_t>(filled) : 0);
         res.set_content(bars_json(bars), "application/json");
+    });
+
+    // ── Slice 3: llm routes (server.py llm_health/models/chat[/stream]) ──
+    srv.Get("/api/llm/health", [deps](const httplib::Request&, httplib::Response& res) {
+        if (!deps.llm) { res.status = 503; res.set_content(llm_error_json("llm_disabled", "LLM not configured"), "application/json"); return; }
+        try {
+            auto st = deps.llm->health();
+            if (!st.ok) {
+                res.status = 503;
+                res.set_content(llm_error_json("down", st.error ? *st.error : "unhealthy"), "application/json");
+                return;
+            }
+            res.set_content(llm_health_ok_json(st, deps.llm_host), "application/json");
+        } catch (const algoforge::llm::LLMError& e) {
+            res.status = 503; res.set_content(llm_error_json("down", e.what()), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 503; res.set_content(llm_error_json("down", e.what()), "application/json");
+        }
+    });
+
+    srv.Get("/api/llm/models", [deps](const httplib::Request&, httplib::Response& res) {
+        if (!deps.llm) { res.status = 503; res.set_content(llm_error_json("llm_disabled", "LLM not configured"), "application/json"); return; }
+        try {
+            res.set_content(llm_models_json(deps.llm->list_models()), "application/json");
+        } catch (const algoforge::llm::LLMError& e) {
+            res.status = llm_error_status(e.kind);
+            res.set_content(llm_error_json(llm_error_kind_name(e.kind), e.what()), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500; res.set_content(llm_error_json("internal", e.what()), "application/json");
+        }
+    });
+
+    srv.Post("/api/llm/chat", [deps](const httplib::Request& req, httplib::Response& res) {
+        if (!deps.llm) { res.status = 503; res.set_content(llm_error_json("llm_disabled", "LLM not configured"), "application/json"); return; }
+        algoforge::llm::ChatRequest creq; std::string err;
+        if (!parse_chat_request(req.body, creq, err)) {
+            res.status = 400; res.set_content(llm_error_json("validation", err), "application/json"); return;
+        }
+        try {
+            res.set_content(llm_chat_response_json(deps.llm->chat(creq)), "application/json");
+        } catch (const algoforge::llm::LLMError& e) {
+            res.status = llm_error_status(e.kind);
+            res.set_content(llm_error_json(llm_error_kind_name(e.kind), e.what()), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500; res.set_content(llm_error_json("internal", e.what()), "application/json");
+        }
+    });
+
+    srv.Post("/api/llm/chat/stream", [deps](const httplib::Request& req, httplib::Response& res) {
+        if (!deps.llm) { res.status = 503; res.set_content(llm_error_json("llm_disabled", "LLM not configured"), "application/json"); return; }
+        algoforge::llm::ChatRequest creq; std::string err;
+        if (!parse_chat_request(req.body, creq, err)) {
+            res.status = 400; res.set_content(llm_error_json("validation", err), "application/json"); return;
+        }
+        auto* llm = deps.llm;
+        res.set_chunked_content_provider(
+            "text/event-stream",
+            [llm, creq](size_t, httplib::DataSink& sink) {
+                try {
+                    for (const auto& chunk : llm->chat_stream(creq)) {
+                        const std::string line = sse_data_line(chunk.delta);
+                        sink.write(line.data(), line.size());
+                        if (chunk.done) break;
+                    }
+                    const std::string done = sse_data_line("[DONE]");
+                    sink.write(done.data(), done.size());
+                } catch (const algoforge::llm::LLMError& e) {
+                    const std::string ep = sse_data_line(llm_error_json(llm_error_kind_name(e.kind), e.what()));
+                    sink.write(ep.data(), ep.size());
+                }
+                sink.done();
+                return true;
+            });
     });
 
     if (!deps.static_dir.empty()) {

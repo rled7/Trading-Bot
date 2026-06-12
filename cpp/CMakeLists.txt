@@ -286,9 +286,9 @@ add_test(NAME S6Tests COMMAND test_s6 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 add_library(af_dashboard STATIC
   src/dashboard/handlers.cpp
   src/dashboard/server.cpp)
-target_include_directories(af_dashboard PUBLIC include third_party/httplib)
+target_include_directories(af_dashboard PUBLIC include third_party/httplib PRIVATE src/llm)
 set_target_properties(af_dashboard PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_link_libraries(af_dashboard PUBLIC Threads::Threads)
+target_link_libraries(af_dashboard PUBLIC Threads::Threads af_llm)
 
 add_executable(test_dashboard
   tests/test_dashboard_main.cpp

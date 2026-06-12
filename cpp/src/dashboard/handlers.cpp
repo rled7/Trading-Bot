@@ -3,10 +3,12 @@
  * Pure dashboard handlers. See header. Python oracle: dashboard/server.py.
  */
 #include "dashboard/handlers.hpp"
+#include "llm_internal.hpp"   // algoforge::llm::json::parse (JsonValue)
 
 #include <algorithm>
 #include <cstdio>
 #include <sstream>
+#include <stdexcept>
 
 namespace algoforge::dashboard {
 
@@ -173,5 +175,98 @@ std::vector<std::string> timeframe_names() {
 }
 
 int clamp_bar_count(int count) { return std::max(1, std::min(count, 5000)); }
+
+// ── Slice 3: llm routes ──
+
+int llm_error_status(algoforge::llm::LLMErrorKind kind) {
+    using K = algoforge::llm::LLMErrorKind;
+    switch (kind) {
+        case K::timeout:       return 504;
+        case K::unreachable:   return 502;
+        case K::http:          return 502;
+        case K::decode:        return 500;
+        case K::model_missing: return 503;
+    }
+    return 500;
+}
+
+std::string llm_error_kind_name(algoforge::llm::LLMErrorKind kind) {
+    using K = algoforge::llm::LLMErrorKind;
+    switch (kind) {
+        case K::unreachable:   return "unreachable";
+        case K::timeout:       return "timeout";
+        case K::http:          return "http";
+        case K::decode:        return "decode";
+        case K::model_missing: return "model_missing";
+    }
+    return "internal";
+}
+
+std::string llm_error_json(const std::string& kind, const std::string& detail) {
+    return "{\"error\":\"" + json_escape(kind) + "\",\"detail\":\"" + json_escape(detail) + "\"}";
+}
+
+std::string llm_health_ok_json(const algoforge::llm::HealthStatus& s, const std::string& host) {
+    std::ostringstream o;
+    o << "{\"status\":\"ok\",";
+    o << "\"host\":" << (host.empty() ? "null" : ("\"" + json_escape(host) + "\"")) << ",";
+    o << "\"model\":" << (s.model ? ("\"" + json_escape(*s.model) + "\"") : "null") << ",";
+    o << "\"model_loaded\":" << (s.model_loaded ? "true" : "false") << "}";
+    return o.str();
+}
+
+std::string llm_models_json(const std::vector<algoforge::llm::ModelInfo>& models) {
+    std::string out = "{\"models\":[";
+    for (size_t i = 0; i < models.size(); ++i) {
+        if (i) out += ",";
+        out += "\"" + json_escape(models[i].name) + "\"";
+    }
+    out += "]}";
+    return out;
+}
+
+std::string llm_chat_response_json(const algoforge::llm::ChatResponse& resp) {
+    std::ostringstream o;
+    o << "{\"content\":\"" << json_escape(resp.message.content) << "\","
+      << "\"model\":\"" << json_escape(resp.model) << "\","
+      << "\"tokens\":" << resp.completion_tokens << "}";
+    return o.str();
+}
+
+std::string sse_data_line(const std::string& payload) { return "data: " + payload + "\n\n"; }
+
+bool parse_chat_request(const std::string& body,
+                        algoforge::llm::ChatRequest& out,
+                        std::string& error_detail) {
+    namespace json = algoforge::llm::json;
+    json::JsonValue root;
+    try {
+        root = json::parse(body);
+    } catch (const std::exception& e) {
+        error_detail = std::string("invalid JSON: ") + e.what();
+        return false;
+    }
+    if (!root.has("messages") || root.get("messages").type != json::JsonType::Array ||
+        root.get("messages").arr.empty()) {
+        error_detail = "messages must not be empty";
+        return false;
+    }
+    out.messages.clear();
+    for (const auto& m : root.get("messages").arr) {
+        if (!m.has("role"))    { error_detail = "missing key 'role'";    return false; }
+        if (!m.has("content")) { error_detail = "missing key 'content'"; return false; }
+        algoforge::llm::ChatMessage cm;
+        cm.role = m.get("role").as_str();
+        cm.content = m.get("content").as_str();
+        out.messages.push_back(std::move(cm));
+    }
+    out.model = (root.has("model") && root.get("model").type == json::JsonType::String)
+                    ? root.get("model").as_str() : "llama3.1:8b";
+    out.temperature = root.has("temperature") ? static_cast<float>(root.get("temperature").as_double())
+                                              : 0.2f;
+    if (root.has("max_tokens")) out.max_tokens = static_cast<int>(root.get("max_tokens").as_int());
+    if (root.has("seed"))       out.seed       = static_cast<int>(root.get("seed").as_int());
+    return true;
+}
 
 } // namespace algoforge::dashboard

@@ -15,6 +15,7 @@
 
 #include "dashboard/log_buffer.hpp"
 #include "core/types.h"   // AF_AccountInfo, AF_Position, AF_Order, AF_Bar, AF_Timeframe
+#include "core/llm.hpp"   // HealthStatus, ModelInfo, ChatResponse, LLMErrorKind
 
 namespace algoforge::dashboard {
 
@@ -65,5 +66,34 @@ bool parse_timeframe(const std::string& name, AF_Timeframe& out);
 std::vector<std::string> timeframe_names();
 /** Server clamp for /api/bars ?count=: max(1, min(count, 5000)). */
 int clamp_bar_count(int count);
+
+// ── Slice 3: llm routes (Python oracle: server.py llm_health/models/chat[/stream]) ──
+
+/** HTTP status for an LLM error kind (Python _LLM_ERROR_STATUS; default 500). */
+int llm_error_status(algoforge::llm::LLMErrorKind kind);
+/** Stable string name of an LLM error kind (for the {"error": <kind>} field). */
+std::string llm_error_kind_name(algoforge::llm::LLMErrorKind kind);
+/** Generic error body → {"error": <kind>, "detail": <detail>}. */
+std::string llm_error_json(const std::string& kind, const std::string& detail);
+
+/** GET /api/llm/health success body → {status,host,model,model_loaded}. host="" → null. */
+std::string llm_health_ok_json(const algoforge::llm::HealthStatus& s, const std::string& host);
+/** GET /api/llm/models → {"models":[name, ...]}. */
+std::string llm_models_json(const std::vector<algoforge::llm::ModelInfo>& models);
+/** POST /api/llm/chat → {content,model,tokens}. */
+std::string llm_chat_response_json(const algoforge::llm::ChatResponse& resp);
+
+/** Format one SSE event line: "data: <payload>\n\n". */
+std::string sse_data_line(const std::string& payload);
+
+/**
+ * Parse a POST /api/llm/chat[/stream] request body into a ChatRequest.
+ * Mirrors server.py validation: empty/absent messages → false ("messages must not be
+ * empty"); a message missing role/content → false ("missing key '<k>'"). Defaults:
+ * model "llama3.1:8b", temperature 0.2. Returns false + error_detail on a 400 case.
+ */
+bool parse_chat_request(const std::string& body,
+                        algoforge::llm::ChatRequest& out,
+                        std::string& error_detail);
 
 } // namespace algoforge::dashboard

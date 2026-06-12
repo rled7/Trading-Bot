@@ -154,4 +154,59 @@ void test_dashboard(RawTestFn& T) {
         CHK_EQ(clamp_bar_count(200), 200);
         CHK_EQ(clamp_bar_count(99999), 5000);
     });
+
+    // ── Slice 3: llm routes ──
+    using LK = algoforge::llm::LLMErrorKind;
+    section("dashboard — llm error status mapping (_LLM_ERROR_STATUS)");
+    T("each error kind maps to the Python status code", []{
+        CHK_EQ(llm_error_status(LK::timeout), 504);
+        CHK_EQ(llm_error_status(LK::unreachable), 502);
+        CHK_EQ(llm_error_status(LK::http), 502);
+        CHK_EQ(llm_error_status(LK::decode), 500);
+        CHK_EQ(llm_error_status(LK::model_missing), 503);
+    });
+    T("error kind names + error body shape", []{
+        CHK_EQ(llm_error_kind_name(LK::timeout), std::string("timeout"));
+        CHK_EQ(llm_error_kind_name(LK::model_missing), std::string("model_missing"));
+        CHK_EQ(llm_error_json("timeout", "slow"),
+               std::string("{\"error\":\"timeout\",\"detail\":\"slow\"}"));
+    });
+
+    section("dashboard — /api/llm/health JSON");
+    T("ok body emits status/host/model/model_loaded; host empty => null", []{
+        algoforge::llm::HealthStatus s;
+        s.ok = true; s.model_loaded = true; s.model = std::string("llama3.1:8b");
+        auto j = llm_health_ok_json(s, "127.0.0.1:11434");
+        CHK(contains(j, "\"status\":\"ok\""));
+        CHK(contains(j, "\"host\":\"127.0.0.1:11434\""));
+        CHK(contains(j, "\"model\":\"llama3.1:8b\""));
+        CHK(contains(j, "\"model_loaded\":true"));
+        auto j2 = llm_health_ok_json(s, "");
+        CHK(contains(j2, "\"host\":null"));
+    });
+
+    section("dashboard — /api/llm/models JSON");
+    T("emits {\"models\":[names]}", []{
+        algoforge::llm::ModelInfo a; a.name = "llama3.1:8b";
+        algoforge::llm::ModelInfo b; b.name = "qwen2.5:32b";
+        CHK_EQ(llm_models_json({}), std::string("{\"models\":[]}"));
+        CHK_EQ(llm_models_json({a, b}),
+               std::string("{\"models\":[\"llama3.1:8b\",\"qwen2.5:32b\"]}"));
+    });
+
+    section("dashboard — /api/llm/chat response JSON");
+    T("emits {content,model,tokens}", []{
+        algoforge::llm::ChatResponse r;
+        r.message.content = "hello"; r.model = "llama3.1:8b"; r.completion_tokens = 7;
+        auto j = llm_chat_response_json(r);
+        CHK(contains(j, "\"content\":\"hello\""));
+        CHK(contains(j, "\"model\":\"llama3.1:8b\""));
+        CHK(contains(j, "\"tokens\":7"));
+    });
+
+    section("dashboard — SSE event formatting (chat/stream)");
+    T("data line + [DONE] terminator", []{
+        CHK_EQ(sse_data_line("hi"), std::string("data: hi\n\n"));
+        CHK_EQ(sse_data_line("[DONE]"), std::string("data: [DONE]\n\n"));
+    });
 }
