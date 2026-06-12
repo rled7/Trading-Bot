@@ -301,4 +301,13 @@ target_link_libraries(test_dashboard PRIVATE af_dashboard)
 set_target_properties(test_dashboard PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME DashboardTests COMMAND test_dashboard WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# ── Dashboard serving binary (the C++ analogue of uvicorn make_app) ──
+# Wires a PaperBroker (+ optional OllamaProvider/AlgoGenService) into the routes
+# and runs httplib::Server. af_engine supplies make_paper_broker.
+add_executable(af_dashboard_server src/dashboard/dashboard_main.cpp)
+target_include_directories(af_dashboard_server PRIVATE include third_party/httplib)
+target_link_libraries(af_dashboard_server PRIVATE af_dashboard af_engine)
+set_target_properties(af_dashboard_server PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+target_compile_definitions(af_dashboard_server PRIVATE AF_VERSION="${PROJECT_VERSION}")
+
 message(STATUS "AlgoForge ${PROJECT_VERSION} | ${CMAKE_BUILD_TYPE} | ${CMAKE_SYSTEM_NAME}")

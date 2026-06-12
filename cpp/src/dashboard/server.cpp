@@ -9,6 +9,7 @@
  * The C++ analogue is httplib's synchronous chunked content provider — proven by the
  * /api/stream/demo route below (the one real feasibility risk; it works).
  */
+#include "dashboard/server.hpp"
 #include "httplib.h"
 #include "dashboard/handlers.hpp"
 #include "dashboard/log_buffer.hpp"
@@ -31,19 +32,6 @@
 #include <vector>
 
 namespace algoforge::dashboard {
-
-struct ServerDeps {
-    std::string                                       version = "dev";
-    std::vector<std::string>                          symbols;
-    LogRingBuffer*                                    logs = nullptr;
-    const af::IBroker*                                broker = nullptr;  // slice 2 data source
-    algoforge::llm::LLMProvider*                      llm = nullptr;     // slice 3 data source
-    algoforge::algo_gen::AlgoGenService*              algo_gen = nullptr; // slice 5 data source
-    std::string                                       llm_host;          // for /api/llm/health
-    std::function<std::pair<std::string, bool>()>     broker_status;  // (name, connected)
-    std::function<double()>                           uptime;
-    std::string                                       static_dir;
-};
 
 // ── Slice 5: in-memory algo store (mirrors the Python module-level _STORE) ──
 // Thread-safe: httplib serves requests on multiple threads. The store mutex is

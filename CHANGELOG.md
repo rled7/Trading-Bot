@@ -52,26 +52,34 @@ belongs to Phase 5).
     POST `/{id}/promote`, POST `/{id}/retire`. Backed by the new public `AlgoGenService`
     facade + `manifest_to_json` serialiser + a thread-safe in-memory `AlgoStore` (mirrors the
     Python `_STORE`). 503 `algo_gen_disabled` on all routes when the service is unconfigured.
+  - Slice 6 — `af_dashboard_server` binary: constructs `ServerDeps` (PaperBroker + optional
+    OllamaProvider/AlgoGenService) and runs `httplib::Server`. The routes now actually serve.
 - **DashboardTests green** (the dashboard parity suite). Note the full `af_tests` suite has
   4 known-failing cases unrelated to the dashboard — the SQLite persistence stub and the
   CSV-fixture loader both need the manually-added `sqlite3.c` amalgamation (see README).
 
-> **All `server.py` routes are now ported.** Scope/wording honesty:
-> - `af_dashboard` is a **library factory** (the analogue of Python's `make_app`); like
->   slices 1–4, the httplib socket layer is untested-by-design and **no serving binary yet
->   instantiates it** — the production `algoforge` binary links `af_engine` only. Wiring the
->   dashboard (and an `AlgoGenService` with a live LLM provider + canonical bars) into a
->   running process is a Phase-6-shaped **user decision**, not unfinished scope. Until then
->   the routes are correct-but-dormant.
-> - Documented behavioural divergences from Python: the C++ `/generate` response folds
->   Python's separate `{validation, tier}` into the unified `TierReport`; `/generate/stream`
->   emits no separate `validation` stage; absent manifest Optionals are omitted, not `null`.
+> **All `server.py` routes are now ported AND served.** Slice 6 adds the
+> **`af_dashboard_server`** binary (the C++ analogue of `uvicorn make_app`): it wires a live
+> in-process `PaperBroker` into the routes and runs `httplib::Server`. Smoke-tested over a
+> socket — `/api/health`, `/api/account`, `/api/bars/{sym}`, `/api/symbols` serve live broker
+> data; `/api/llm/*` and `/api/algos/*` return 503 (`llm_disabled` / `algo_gen_disabled`)
+> until enabled with `--llm-host URL`, which constructs an `OllamaProvider` + `AlgoGenService`
+> over canonical EURUSD/H1 bars. The httplib binding itself remains untested-by-design; the
+> serialisers, parsers, and error mapping carry the parity tests.
+>
+> Documented behavioural divergences from Python: the C++ `/generate` response folds Python's
+> separate `{validation, tier}` into the unified `TierReport`; `/generate/stream` emits no
+> separate `validation` stage; absent manifest Optionals are omitted, not `null`.
 
-### Still open (decisions, not blockers)
+### Still open (decisions / hard blocks only)
 - **MT5 connector** — hard-blocked: needs the proprietary Windows MetaTrader5 DLL.
   Stays a WIN32-only stub on macOS/Linux.
-- Phase 6 — whether to flip production over to the C++ build and retire Python (or keep
-  Python as the reference oracle).
+- **Phase 6 (decision)** — whether to flip production over to the C++ build and retire Python
+  (or keep Python as the reference oracle). The C++ port is now feature-complete to parity
+  (engine, brokers, algo_gen, S6, and a served dashboard), so this is purely a go/no-go call.
+- **Live LLM/algo_gen demo (optional)** — running `af_dashboard_server --llm-host …` against a
+  real Ollama instance to exercise `/api/algos` end-to-end is environment-gated (needs Ollama),
+  not a code task.
 
 ---
 
