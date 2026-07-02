@@ -48,11 +48,20 @@ struct Hypothesis {
 
 /** Result of one observe() tick. */
 struct DiscoveryEvent {
-    enum class Kind { None, HypothesisFormed, ManifestEmitted, RateLimited, ValidatorRejected };
+    enum class Kind {
+        None, HypothesisFormed, ManifestEmitted, RateLimited, ValidatorRejected,
+        /** generate_fn/validate_fn threw (e.g. LLM unreachable). The hypothesis that
+         *  triggered generation is preserved; no manifest/report exists to attach. This
+         *  is the daemon's exception boundary — observe() itself never throws, so a
+         *  background process driving it can run unattended through transient LLM
+         *  failures instead of crashing on the first one. */
+        GenerationFailed,
+    };
     Kind                        kind = Kind::None;
     std::optional<Hypothesis>   hypothesis;
     std::optional<AlgoManifest> manifest;
     std::optional<TierReport>   report;
+    std::string                 error;  ///< set only for Kind::GenerationFailed
 };
 
 /** Daemon configuration. Tunables + injectable dependencies (Decisions 2/3/4/5/6). */

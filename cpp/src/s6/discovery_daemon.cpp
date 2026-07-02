@@ -140,10 +140,30 @@ DiscoveryEvent DiscoveryDaemon::observe(const Bar& bar, int64_t now_ms) {
         return ev;
     }
 
-    // Generate → validate → gate (Decisions 4 & 5).
-    AlgoManifest manifest = cfg_.generate_fn(h);
-    std::vector<Bar> window(bars_.begin(), bars_.end());
-    TierReport report = cfg_.validate_fn(manifest, window);
+    // Generate → validate → gate (Decisions 4 & 5). This is the daemon's
+    // exception boundary: generate_fn typically calls out to an LLM (network),
+    // which can fail for many transient reasons (host down, timeout, bad
+    // response). observe() must never throw — a background daemon has to
+    // survive a bad tick and keep observing, not crash the whole process on
+    // the first LLM hiccup (mirrors the existing try/catch around promote()
+    // below, which already treats promotion as best-effort for the same reason).
+    AlgoManifest manifest;
+    TierReport   report;
+    try {
+        manifest = cfg_.generate_fn(h);
+        std::vector<Bar> window(bars_.begin(), bars_.end());
+        report = cfg_.validate_fn(manifest, window);
+    } catch (const std::exception& e) {
+        ev.kind = DiscoveryEvent::Kind::GenerationFailed;
+        ev.hypothesis = std::move(h);
+        ev.error = e.what();
+        return ev;
+    } catch (...) {
+        ev.kind = DiscoveryEvent::Kind::GenerationFailed;
+        ev.hypothesis = std::move(h);
+        ev.error = "unknown exception in generate_fn/validate_fn";
+        return ev;
+    }
 
     const bool meets_floor =
         report.passed && static_cast<int>(report.tier) >= static_cast<int>(cfg_.target_tier_floor);

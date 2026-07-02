@@ -2,15 +2,20 @@
 # Multi-stage: heavy toolchain in the builder, slim runtime with just the binaries.
 FROM ubuntu:22.04 AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    g++ cmake make ca-certificates && rm -rf /var/lib/apt/lists/*
+    g++ cmake make ca-certificates libcurl4-openssl-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY cpp/ ./cpp/
+# libcurl-dev above makes find_package(CURL) succeed so the LLM HTTP transport
+# is actually compiled in (AF_HAS_LIBCURL) — without it, af_s6_daemon and
+# af_dashboard_server's --llm-host both silently degrade to "unreachable".
 RUN cmake -S cpp -B build -DCMAKE_BUILD_TYPE=Release \
- && cmake --build build --target algoforge af_dashboard_server -j"$(nproc)"
+ && cmake --build build --target algoforge af_dashboard_server af_s6_daemon -j"$(nproc)"
 
 FROM ubuntu:22.04
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcurl4 ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=builder /src/build/algoforge /src/build/af_dashboard_server ./
+COPY --from=builder /src/build/algoforge /src/build/af_dashboard_server /src/build/af_s6_daemon ./
 ENV LOG_LEVEL=info
 ENV TELEGRAM_TOKEN=""
 ENV TELEGRAM_CHAT_ID=""

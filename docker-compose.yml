@@ -2,6 +2,10 @@
 # `docker compose up` starts the C++ engine + dashboard only.
 # The Python/JS/C implementations remain as reference oracles behind profiles:
 #   docker compose --profile oracle up algoforge-python
+# S6 (background algo-discovery daemon) is opt-in behind its own profile — it
+# autonomously proposes/promotes manifests into the registry, so it shouldn't
+# start silently alongside the trading engine by default:
+#   docker compose --profile s6 up algoforge-cpp-s6
 services:
   algoforge-cpp:
     build:
@@ -24,6 +28,27 @@ services:
       - "${AF_DASHBOARD_PORT:-8000}:8000"
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-info}
+    restart: unless-stopped
+
+  # Background algo-discovery daemon (S6, docs/s6_spec.md). Never places
+  # orders — only observes bars and proposes/promotes candidate manifests
+  # into the shared registry volume. Requires a reachable Ollama host; refuses
+  # to start without --llm-host (see cpp/src/s6/s6_main.cpp).
+  algoforge-cpp-s6:
+    profiles: ["s6"]
+    build:
+      context: .
+      dockerfile: Dockerfile.cpp-lang
+    command: [
+      "./af_s6_daemon",
+      "--llm-host", "${AF_LLM_HOST:-http://host.docker.internal:11434}",
+      "--symbol", "${AF_S6_SYMBOL:-EURUSD}",
+      "--registry", "/app/registry"
+    ]
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./registry:/app/registry
     restart: unless-stopped
 
   algoforge-python:

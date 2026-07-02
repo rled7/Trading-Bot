@@ -1,55 +1,83 @@
 # Trading-Bot — Next Steps & Decisions
 
-*Last updated: 2026-06-20 (verified against the repo). Captures the **honest** remaining work and the
-decision points needed to move forward.*
+*Last updated: 2026-07-02 (verified against the repo, corrected — the previous
+version incorrectly claimed S6 was "not started"; it was already built on
+2026-06-09 and just never had a runnable entrypoint, which is now fixed).*
 
-## Where the project actually is (verified 2026-06-20)
+## Where the project actually is (verified 2026-07-02)
 
-- **104 commits.** `main` == `cpp-port-phase1` == `origin/main` (all at `9fc9638`); clean tree, pushed.
-- **C++ is the production runtime** — flipped in **Phase 6 (2026-06-12)**. `docker compose up` builds and
-  runs the C++ engine (`algoforge`) + C++ dashboard (`af_dashboard_server`, :8000). Python is the parity
-  oracle (compose `oracle` profile).
-- **Tests green:** Python **618/618**, C++ **102/102** (ran 2026-06-20).
-- **Complete:** core R1–R6 (38 indicators, 20 patterns, broker abstraction + paper broker) in all four
-  languages; **S1** algo generator, **S2** local LLM, **S3** dashboard, **S4** analytics — all four;
-  **S5** multi-broker REST adapters (OANDA, Alpaca, IBKR, Binance, Coinbase) in Python (191 mocked tests).
+- **C++ is the production runtime** (Phase 6, 2026-06-12). `docker compose up` runs the C++ engine
+  (`algoforge`) + C++ dashboard (`af_dashboard_server`, :8000). Python is the parity oracle
+  (`--profile oracle`).
+- **Tests green:** C++ **16/16 suites** including `S6Tests` (ran 2026-07-02 via `ctest`).
+- **Complete:** core R1–R6 in all four languages; **S1** algo generator, **S2** local LLM, **S3**
+  dashboard, **S4** analytics — all four; **S5** multi-broker REST adapters (OANDA, Alpaca, IBKR,
+  Binance, Coinbase) in Python + C++ (191 mocked tests); **S6** background discovery daemon — built,
+  tested (`S6Tests` golden oracle), **and now has a real entrypoint** (`af_s6_daemon`, see below).
+- **libcurl was never wired into the C++ build** — found while wiring S6. `af_dashboard_server
+  --llm-host` and the S6 daemon both depend on it to reach a real LLM; without it every LLM call threw
+  `LLMError(unreachable)` by design (so tests with a mock transport still passed), but nothing actually
+  worked end-to-end. Fixed: `cpp/CMakeLists.txt` now does `find_package(CURL)` and links it into
+  `af_llm` when present; `Dockerfile.cpp-lang` installs `libcurl4-openssl-dev`/`libcurl4`. Verified
+  locally: curl found, daemon makes real HTTP attempts (confirmed via a real "connection refused"
+  against a not-running Ollama, not the old "unreachable" fallback).
+- **Found + fixed a real crash bug while verifying S6 end-to-end:** `DiscoveryDaemon::observe()` had no
+  exception handling around the LLM `generate_fn`/`validate_fn` calls (unlike the `promote()` call two
+  lines below it, which was already defensively wrapped) — a single LLM failure crashed the entire
+  daemon process. Added a `Kind::GenerationFailed` event + try/catch; verified the daemon now survives
+  100+ consecutive LLM failures without dying (ran it live against an unreachable Ollama host).
 
-**Net: ~85–90% complete as a backtest + paper-trade + algo-generation + analytics platform.**
+**Net: S1–S6 are all built, tested, and now runnable. The one substantive gap left is live-broker
+proof — see below.**
 
-## The real gap to "done" — two items
+## The real gap to "done" — one item now
 
-### 1. Live execution is wired but never proven against a real broker (the #1 gap)
+### Live execution is wired but never proven against a real broker (the #1 gap)
 The S5 adapters pass **191 _mocked_ tests** — they have **never hit a real broker API**. Live MT5 (R12)
 is Python-only and needs Windows + an MT5 terminal. So the bot fully backtests and paper-trades but has
 **not placed a single real order.**
 
-**To close it — decision needed:** which broker to validate first against its real sandbox.
-- **Alpaca** — easiest: free paper-trading API, dev-friendly REST/WS, US equities + crypto. *Recommended
-  first.* The adapter exists; point `AF_ALPACA_*` at the paper endpoint and exercise connect → get_account
-  → get_bars → place_order → get_positions → close_position against the live sandbox.
-- OANDA (FX-native, aligns with the paper broker's FX focus) · IBKR (institutional, steep) ·
-  Binance / Coinbase (crypto).
+**Status: in progress.** Alpaca was picked (free paper-trading sandbox, no funding/KYC needed). Waiting
+on the user to generate an `AF_ALPACA_API_KEY` / `AF_ALPACA_API_SECRET` pair from a **Paper Trading**
+account at alpaca.markets and export them locally — this requires the user's own Alpaca account and
+cannot be done from here. Once set, the validation itself (connect → get_account → get_bars →
+place_order → get_positions → close_position against the real paper sandbox) is ready to run.
 
-### 2. S6 — background C++ algo-discovery daemon (last stretch goal, not started)
-Always-on observation process that forms hypotheses from market data and emits S1-compatible manifests
-without human prompting. C++-only by design. **Still blocked on 6 decisions:**
-1. Hypothesis logic — statistical drift / pattern co-occurrence / regime detection / LLM-on-bar-windows?
-2. Data window — rolling 1h / 24h / 7d / multi-horizon?
-3. Manifest cadence + rate limit (don't flood the registry).
-4. Tier targeting — Orange/Yellow first, or attempt Green/White?
-5. Validator integration — submit → S1 validator → promote only survivors?
-6. Resource budget — max CPU/RAM; pause during live sessions or always-on?
+## S6 — background C++ algo-discovery daemon: now wired in
+
+Was mistakenly listed here as "not started, blocked on 6 decisions" — both were wrong. The 6 decisions
+were locked 2026-06-08 (see `docs/CPP-PORT-PLAN.md` progress log) and the daemon itself was built and
+golden-oracle-tested 2026-06-09. What was actually missing — a runnable entrypoint — is fixed:
+
+- New `cpp/src/s6/s6_main.cpp` → `af_s6_daemon` binary. Drives `DiscoveryDaemon::observe()` directly
+  (not the class's optional internal-thread wrapper) from its own poll loop, so its behavior matches
+  exactly what the golden-oracle suite already proves.
+- Bootstraps a full historical window (`max_bars_retained` bars, ~1 week at M1) in one shot at startup
+  instead of needing >14h of individual poll ticks to fill the buffer from cold.
+- Refuses to start without `--llm-host` (fails loudly, matching this codebase's existing
+  misconfiguration convention) rather than silently idling.
+- `docker-compose.yml`: new `algoforge-cpp-s6` service, gated behind `--profile s6` (opt-in — it
+  autonomously proposes/promotes manifests into the shared registry, so it shouldn't start silently
+  alongside the trading engine by default). `docker compose --profile s6 up algoforge-cpp-s6`.
+- **Not independently verified:** the actual `docker build`/`docker compose` run — Docker isn't
+  installed in the sandbox this was built in. The Dockerfile change is mechanical (adds
+  `libcurl4-openssl-dev`/`libcurl4` + one more build target + one more `COPY`, exact same pattern as the
+  existing `af_dashboard_server` entry) and `docker compose config` confirms the YAML/variable
+  interpolation resolves correctly, but building the image itself needs to happen on a machine with
+  Docker. **This is the one thing that needs the user (or a Docker-capable session) to run and confirm.**
 
 ## Closed decisions (for the record)
-- **C++ as production runtime: DECIDED** (Phase 6). The R7–R12 ladder is feature-complete in C++; C, JS
-  (and Python beyond the oracle role) are reference/educational builds, **not** targeted for full parity.
-  This retires the old "keep porting R7–R12 to all languages?" question.
-- **S5 multi-broker: DONE** in Python (adapters + registry + env-var creds + paper/live same code path).
+- **C++ as production runtime: DECIDED** (Phase 6).
+- **S5 multi-broker: DONE** in Python + C++.
+- **S6: DECIDED + BUILT + WIRED** (this session). No longer blocked on anything.
 
-## To unblock the next coding session
-Answer **one**: *"Validate Alpaca live first"* (I wire `AF_ALPACA_*` to the paper sandbox and exercise the
-full order lifecycle), **or** give the 6 S6 decisions (defaults proposed in `docs/CPP-PORT-PLAN.md`).
-Without one of these, an autonomous resume queues questions rather than codes — see [[session-limit-recovery]].
+## To unblock the next session
+Two items remain, and neither is "more building":
+1. **You:** generate the Alpaca paper key pair and export `AF_ALPACA_API_KEY`/`AF_ALPACA_API_SECRET`
+   (`AF_ALPACA_PAPER=1`) — tell me once it's set and I'll run the live validation.
+2. **You (or any Docker-capable machine):** `docker build -f Dockerfile.cpp-lang .` and
+   `docker compose --profile s6 up algoforge-cpp-s6` — confirm the container actually builds/runs; I
+   could not execute this in the sandbox this work was done in.
 
 ## Housekeeping note
 Stray remote branch `origin/claude/upload-project-files-sRlkV` is a leftover upload branch — safe to

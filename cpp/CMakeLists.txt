@@ -28,6 +28,19 @@ endif()
 
 find_package(Threads REQUIRED)
 
+# libcurl is optional (llm.hpp / ollama.cpp already gate on AF_HAS_LIBCURL and
+# throw a clean LLMError when it's absent so tests with MockTransport still
+# pass) — but without it, no C++ binary can ever reach a real LLM over HTTP,
+# which silently neutered --llm-host on af_dashboard_server and af_s6_daemon.
+# Link it when available; degrade gracefully (documented, not silent) when not.
+find_package(CURL)
+if(CURL_FOUND)
+  message(STATUS "libcurl found (${CURL_VERSION}) — LLM HTTP transport enabled")
+else()
+  message(STATUS "libcurl NOT found — LLM calls will throw LLMError(unreachable); "
+                  "install libcurl to enable --llm-host")
+endif()
+
 # ── Bundled SQLite3 ──
 add_library(sqlite3 STATIC third_party/sqlite3/sqlite3.c)
 target_include_directories(sqlite3 PUBLIC third_party/sqlite3)
@@ -138,6 +151,11 @@ set(LLM_SOURCES
 add_library(af_llm STATIC ${LLM_SOURCES})
 target_include_directories(af_llm PUBLIC include PRIVATE src/llm)
 set_target_properties(af_llm PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+if(CURL_FOUND)
+  target_compile_definitions(af_llm PUBLIC AF_HAS_LIBCURL)
+  target_include_directories(af_llm PRIVATE ${CURL_INCLUDE_DIRS})
+  target_link_libraries(af_llm PRIVATE ${CURL_LIBRARIES})
+endif()
 
 # rest_broker.cpp (in af_engine) calls algoforge::llm::json::parse from af_llm.
 target_link_libraries(af_engine PUBLIC af_llm)
@@ -283,6 +301,14 @@ target_include_directories(test_s6 PRIVATE include tests src src/algo_gen)
 target_link_libraries(test_s6 PRIVATE af_s6)
 set_target_properties(test_s6 PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME S6Tests COMMAND test_s6 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# ── S6 daemon serving binary — the production entrypoint that was missing ──
+# (af_s6 + test_s6 existed with nothing that ever started the daemon).
+add_executable(af_s6_daemon src/s6/s6_main.cpp)
+target_include_directories(af_s6_daemon PRIVATE include)
+target_link_libraries(af_s6_daemon PRIVATE af_s6 af_engine)
+set_target_properties(af_s6_daemon PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+target_compile_definitions(af_s6_daemon PRIVATE AF_VERSION="${PROJECT_VERSION}")
 
 # ── Dashboard (Phase 5, slice 1) ──
 # Pure handlers + log buffer (all logic, parity-tested) + a thin httplib socket

@@ -123,3 +123,26 @@ Everything still buildable is now either a user decision or a platform impossibi
 - **Phase 5 (dashboard web)** — explicitly LAST; the user reserved a scope-revision checkpoint
   here before sinking days into the least-defensible piece. *User decision.*
 - **Phase 6 (flip production to C++)** — only after the above; decide Python's fate. *User decision.*
+
+- 2026-07-02: **Phase 4 (S6 daemon) WIRED IN** — user authorized "wire it in now". S6 had been
+  built (2026-06-09) and golden-oracle-tested but had **no runnable entrypoint** — `docs/NEXT-STEPS.md`
+  had drifted and incorrectly claimed S6 was "not started, blocked on 6 decisions" (both wrong; corrected
+  in that file). Added `cpp/src/s6/s6_main.cpp` → `af_s6_daemon` binary, driving
+  `DiscoveryDaemon::observe()` directly from its own poll loop (not the class's optional thread wrapper),
+  with a startup bootstrap that fills the daemon's window from one `get_bars()` call instead of needing
+  >14h of individual poll ticks from cold. Wired into `cpp/CMakeLists.txt`, `Dockerfile.cpp-lang`
+  (+ `libcurl4-openssl-dev`/`libcurl4`), and a new opt-in `docker-compose.yml` service
+  (`algoforge-cpp-s6`, `--profile s6` — autonomous registry-mutating daemons shouldn't start silently by
+  default). Two real bugs surfaced and fixed while verifying this end-to-end (not just typechecked):
+  (1) `find_package(CURL)` was never wired into the build at all — every C++ LLM call across the whole
+  codebase (including `af_dashboard_server --llm-host`, pre-existing) silently threw
+  `LLMError(unreachable)` regardless of whether Ollama was actually reachable; (2)
+  `DiscoveryDaemon::observe()` had no exception handling around `generate_fn`/`validate_fn` (unlike the
+  `promote()` call two lines below, already defensively try/caught) — one LLM failure crashed the whole
+  daemon process. Added `Kind::GenerationFailed` + try/catch; verified live (ran the daemon against an
+  unreachable Ollama host, confirmed 100+ consecutive failures logged without the process dying).
+  `ctest` still 16/16 after the change (existing `S6Tests` golden oracle uses `MockTransport`, which
+  never throws, so the new catch path doesn't alter any pinned expected event sequence). **Not verified:
+  the actual `docker build`/`docker compose` run** — Docker isn't installed in the sandbox this was built
+  in; `docker compose config` confirms the YAML resolves correctly, but building the image needs a
+  Docker-capable machine.
