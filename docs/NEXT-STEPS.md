@@ -86,8 +86,6 @@ One item remains, and it isn't "more building" — it needs your Alpaca account:
 1. **You:** generate the Alpaca paper key pair and export `AF_ALPACA_API_KEY`/`AF_ALPACA_API_SECRET`
    (`AF_ALPACA_PAPER=1`) — tell me once it's set and I'll run the live validation immediately.
 
-(Docker build/run is no longer an open item — verified for real this session, see the S6 section above.)
-
-## Housekeeping note
-Stray remote branch `origin/claude/upload-project-files-sRlkV` is a leftover upload branch — safe to
-delete when convenient (left in place; deleting a remote branch is destructive, so it's the user's call).
+(Docker build/run is no longer an open item — verified for real this session, see the S6 section above.
+The stray `origin/claude/upload-project-files-sRlkV` branch mentioned in earlier revisions of this doc
+has been deleted, per the user.)
