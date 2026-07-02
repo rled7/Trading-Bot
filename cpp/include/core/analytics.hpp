@@ -18,6 +18,7 @@
 #include "core/types.h"
 
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <span>
 #include <string>
